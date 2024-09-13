@@ -55,7 +55,7 @@ jobs:
       - name: Extract metadata for dev branch
         id: meta_dev
         if: github.ref == 'refs/heads/dev'
-        run: echo "::set-output name=tags::testing"
+        run: echo "::set-output name=tags::jnstockley/bsn:testing"
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v6.7.0
