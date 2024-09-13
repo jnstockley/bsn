@@ -71,15 +71,10 @@ def check_for_new_videos():
     current_channels = get_channels_by_id([channel.id for channel in channels])
     new_video_channels = get_channels_with_new_videos(channels, current_channels)
     update_channels(new_video_channels)
-    send_youtube_channels_notifications(new_video_channels)
+
+    if len(new_video_channels) > 0:
+        send_youtube_channels_notifications(new_video_channels)
 
 def _chunk_list(lst: list[str], chunk_size: int = 50) -> str:
     for i in range(0, len(lst), chunk_size):
         yield ','.join(lst[i:i + chunk_size])
-
-
-def generate_list(x, y):
-    def random_string(size):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=size))
-
-    return [random_string(y) for _ in range(x)]
