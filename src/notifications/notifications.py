@@ -1,9 +1,12 @@
 from apprise import apprise
+from src import logger
 
 from notifications import apprise_urls
 
 
 def send_youtube_channels_notifications(channels: list[dict]):
+    logger.info(f"Sending notifications for {channels} channels")
+    
     apobj = apprise.Apprise()
 
     for apprise_url in apprise_urls:
