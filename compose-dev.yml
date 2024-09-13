@@ -1,0 +1,12 @@
+services:
+  bsn_dev:
+    container_name: bsn_dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/bsn/data
+      - ./logs:/bsn/logs
+    env_file:
+      - .env
+    restart: always

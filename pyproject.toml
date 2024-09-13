@@ -11,6 +11,7 @@ google-api-python-client = "^2.145.0"
 python-dotenv = "^1.0.1"
 peewee = "^3.17.6"
 pandas = "^2.2.2"
+apprise = "^1.9.0"
 
 
 [build-system]
