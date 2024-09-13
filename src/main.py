@@ -25,8 +25,6 @@ def initialize():
         populate_tables()
 
 if __name__ == '__main__':
-    #time.sleep(60)
-
     logger.info("Staring BSN...")
     initialize()
 

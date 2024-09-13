@@ -3,6 +3,15 @@ name: Publish Docker image
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - dev
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/deploy.yml'
+      - 'src/**'
+      - 'poetry.lock'
+      - 'pyproject.toml'
 
 jobs:
   push_to_registries:
@@ -36,11 +45,17 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
+        if: github.ref == 'refs/heads/main'
         uses: docker/metadata-action@v5.5.1
         with:
           images: |
             jnstockley/bsn
             ghcr.io/${{ github.repository }}
+
+      - name: Extract metadata for dev branch
+        id: meta_dev
+        if: github.ref == 'refs/heads/dev'
+        run: echo "::set-output name=tags::jnstockley/bsn:testing"
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v6.7.0
@@ -48,5 +63,5 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags || steps.meta_dev.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
