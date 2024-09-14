@@ -1,12 +1,11 @@
 import os
-import string
-import random
+from datetime import datetime, timedelta
+
 import pandas as pd
 
 from googleapiclient.errors import HttpError
 
 from auth.youtube import get_youtube_service
-from models import database
 from models.models import YouTubeChannel
 from notifications.notifications import send_youtube_channels_notifications
 
@@ -41,7 +40,7 @@ def get_channels_by_id(channel_ids: list[str]) -> list[dict] | None:
                 return None
             channels.extend(response['items'])
         except HttpError as e:
-            logger.error(f'An HTTP error {e.resp.status} occurred: {e.content} with channel_ids: {channel_str}')
+            logger.error(f'An HTTP error {e.resp.status} occurred: {e.content.decode()} with channel_ids: {channel_str}')
             return None
 
     return channels
@@ -72,8 +71,40 @@ def check_for_new_videos():
     new_video_channels = get_channels_with_new_videos(channels, current_channels)
     update_channels(new_video_channels)
 
+    video = None
     if len(new_video_channels) > 0:
-        send_youtube_channels_notifications(new_video_channels)
+        if len(new_video_channels) == 1:
+            video = get_most_recent_video(new_video_channels[0]['id'])
+
+        send_youtube_channels_notifications(new_video_channels, video)
+
+def get_most_recent_video(channel_id: str) -> dict | None:
+    youtube = get_youtube_service()
+
+    playlist_id = f"UU{channel_id[2:]}"
+
+    request = youtube.playlistItems().list(
+        part="snippet,status",
+        maxResults=1,
+        playlistId=playlist_id
+    )
+
+    try:
+        logger.info(f"Making request {request.uri}")
+        response = request.execute()
+        if 'items' not in response:
+            logger.warning(f'No items found with channel_id: {channel_id}')
+            return None
+
+        video = response['items'][0]
+        published_at = datetime.strptime(video['snippet']['publishedAt'], "%Y-%m-%dT%H:%M:%SZ")
+
+        if video['status']['privacyStatus'] == 'public' and video['snippet']['position'] == 0 and published_at >= (datetime.now() - timedelta(minutes=2)):
+            return video
+
+    except HttpError as e:
+        logger.error(f'An HTTP error {e.resp.status} occurred: {e.content} with channel_id: {channel_id}')
+        return None
 
 def _chunk_list(lst: list[str], chunk_size: int = 50) -> str:
     for i in range(0, len(lst), chunk_size):
