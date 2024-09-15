@@ -1,3 +1,4 @@
+import math
 import os
 from datetime import datetime, timedelta
 
@@ -105,6 +106,19 @@ def get_most_recent_video(channel_id: str) -> dict | None:
     except HttpError as e:
         logger.error(f'An HTTP error {e.resp.status} occurred: {e.content} with channel_id: {channel_id}')
         return None
+
+def determine_request_interval():
+    num_channels: int = len(YouTubeChannel.select())
+    num_api_keys: int = len(os.environ['YOUTUBE_API_KEYS'].split(','))
+    max_num_request: int = 10000
+    num_requests_for_all_channels = math.ceil((num_channels * 2) / 50)
+
+    total_requests_per_day = num_api_keys * max_num_request
+    seconds_per_day = 24 * 60 * 60
+    interval_between_batches = seconds_per_day / (total_requests_per_day / num_requests_for_all_channels)
+
+    return math.ceil(interval_between_batches)
+
 
 def _chunk_list(lst: list[str], chunk_size: int = 50) -> str:
     for i in range(0, len(lst), chunk_size):
