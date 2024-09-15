@@ -3,8 +3,7 @@ import time
 from models import database
 from models.models import YouTubeChannel
 from src import logger
-from youtube.youtube import import_subscriptions, get_channels_with_new_videos, check_for_new_videos, \
-    determine_request_interval
+from youtube.youtube import import_subscriptions, get_channels_with_new_videos, check_for_new_videos, calculate_interval_between_cycles
 
 
 def create_tables():
@@ -28,7 +27,7 @@ def initialize():
 if __name__ == '__main__':
     logger.info("Staring BSN...")
     initialize()
-    interval_between_checks: int = determine_request_interval()
+    interval_between_checks: int = calculate_interval_between_cycles()
 
     while True:
         check_for_new_videos()

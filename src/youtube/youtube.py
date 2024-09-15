@@ -107,17 +107,23 @@ def get_most_recent_video(channel_id: str) -> dict | None:
         logger.error(f'An HTTP error {e.resp.status} occurred: {e.content} with channel_id: {channel_id}')
         return None
 
-def determine_request_interval():
+def calculate_interval_between_cycles():
     num_channels: int = len(YouTubeChannel.select())
     num_api_keys: int = len(os.environ['YOUTUBE_API_KEYS'].split(','))
-    max_num_request: int = 10000
-    num_requests_for_all_channels = math.ceil((num_channels * 2) / 50)
+    max_requests_per_key_per_day = 10000
+    total_requests_allowed_per_day = num_api_keys * max_requests_per_key_per_day
+    requests_per_cycle = math.ceil((num_channels + 1) / 50)
 
-    total_requests_per_day = num_api_keys * max_num_request
+    # Calculate the number of cycles we can perform in a day
+    num_cycles_per_day = total_requests_allowed_per_day // requests_per_cycle
+
+    # Total seconds in a day
     seconds_per_day = 24 * 60 * 60
-    interval_between_batches = seconds_per_day / (total_requests_per_day / num_requests_for_all_channels)
 
-    return math.ceil(interval_between_batches)
+    # Calculate the interval between each cycle
+    interval_between_cycles = seconds_per_day / num_cycles_per_day
+
+    return math.ceil(interval_between_cycles)
 
 
 def _chunk_list(lst: list[str], chunk_size: int = 50) -> str:
