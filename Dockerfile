@@ -1,28 +1,14 @@
-FROM python:3.12.6-alpine3.20
+FROM jnstockley/poetry:1.8.3-python3.12.6
 
-RUN apk update
-
-RUN apk upgrade
-
-RUN apk add alpine-sdk python3-dev libressl-dev musl-dev libffi-dev gcc libressl-dev curl
-
-RUN addgroup -S bsn && adduser -S bsn -G bsn
+USER root
 
 RUN mkdir /bsn
 
-RUN chown -R bsn:bsn /bsn
+RUN chown -R python3:python3 /bsn
 
-USER bsn
+USER python3
 
-ENV PATH="/home/bsn/.local/bin:$PATH"
-
-ENV PYTHONPATH=/bsn
-
-RUN python3 -m pip install --upgrade pip
-
-RUN python3 -m pip install --user pipx
-
-RUN pipx install poetry
+ENV PYTHONPATH=/bsn:$PYTHONPATH
 
 COPY pyproject.toml /bsn
 
@@ -33,11 +19,5 @@ WORKDIR /bsn/src
 RUN poetry install
 
 COPY src /bsn/src
-
-USER root
-
-RUN apk del alpine-sdk python3-dev libressl-dev musl-dev libffi-dev gcc libressl-dev curl
-
-USER bsn
 
 ENTRYPOINT ["poetry", "run", "python", "main.py"]
