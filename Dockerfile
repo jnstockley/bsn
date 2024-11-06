@@ -1,4 +1,4 @@
-FROM jnstockley/poetry:1.8.4-python3.13.0
+FROM jnstockley/poetry:1.8.4
 
 USER root
 
