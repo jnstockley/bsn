@@ -3,18 +3,19 @@ name: Publish Docker image
 on:
   release:
     types: [published]
+  pull_request:
   push:
     branches:
-      - dev
+      - main
     paths:
-      - 'Dockerfile'
-     # - '.github/workflows/deploy.yml'
-      - 'src/**'
-      - 'poetry.lock'
-      - 'pyproject.toml'
+      - Dockerfile
+      - src/**
+      - poetry.lock
+      - pyproject.toml
 
 jobs:
   push_to_registries:
+    if: github.event_name == 'release' || github.base_ref == 'main'
     name: Push Docker image to multiple registries
     runs-on: ubuntu-latest
     permissions:
@@ -45,17 +46,21 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        if: github.ref != 'refs/heads/dev'
+        if: github.event_name == 'release'
         uses: docker/metadata-action@v5
         with:
           images: |
             jnstockley/bsn
-            ghcr.io/${{ github.repository }}
+            ghcr.io/jnstockley/bsn
+          tags: |
+            latest
+            ${{ github.event.release.tag_name }}
 
-      - name: Extract metadata for dev branch
-        id: meta_dev
-        if: github.ref == 'refs/heads/dev'
-        run: echo "::set-output name=tags::jnstockley/bsn:testing"
+      - name: Extract metadata for main branch
+        id: meta_main
+        if: github.base_ref == 'main'
+        run: |
+          echo "tags=jnstockley/bsn:testing,jnstockley/bsn:testing-$(date +'%Y%m%d%H%M%S'),ghcr.io/jnstockley/bsn:testing,ghcr.io/jnstockley/bsn:testing-$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v6
@@ -63,5 +68,5 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags || steps.meta_dev.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags || env.tags }}
           labels: ${{ steps.meta.outputs.labels }}
