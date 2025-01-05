@@ -1,0 +1,13 @@
+.github/
+data/
+.dockerignore
+.gitignore
+.idea
+.git
+.venv
+*.env
+*.yml
+Dockerfile
+logs/
+docs/
+test/
