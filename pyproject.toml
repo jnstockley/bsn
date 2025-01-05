@@ -8,11 +8,11 @@ authors = [
 readme = "README.md"
 requires-python = "3.13.1"
 dependencies = [
-    "google-api-python-client==2.145.0",
+    "google-api-python-client==2.157.0",
     "python-dotenv==1.0.1",
-    "peewee==3.17.6",
+    "peewee==3.17.8",
     "pandas==2.2.3",
-    "apprise==1.9.0"
+    "apprise==1.9.1"
 ]
 
 
