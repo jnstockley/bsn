@@ -1,4 +1,4 @@
-FROM jnstockley/poetry:1.8.5-python3.13.1 AS build
+FROM jnstockley/poetry:2.0.0-python3.13.1 AS build
 
 RUN apk update && \
     apk upgrade && \
@@ -15,7 +15,7 @@ RUN poetry install --no-root
 
 COPY src /bsn/src
 
-FROM jnstockley/poetry:1.8.5-python3.13.1
+FROM jnstockley/poetry:2.0.0-python3.13.1
 
 ENV PYTHONPATH=/bsn:$PYTHONPATH
 
