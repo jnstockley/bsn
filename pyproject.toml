@@ -1,17 +1,19 @@
-[tool.poetry]
+[project]
 name = "bsn"
 version = "0.1.0"
 description = ""
-authors = ["Jack Stockley <34308937+jnstockley@users.noreply.github.com>"]
+authors = [
+    {name = "Jack Stockley", email = "jack@jstockley.com"}
+]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.12"
-google-api-python-client = "^2.145.0"
-python-dotenv = "^1.0.1"
-peewee = "^3.17.6"
-pandas = "^2.2.2"
-apprise = "^1.9.0"
+requires-python = "3.13.1"
+dependencies = [
+    "google-api-python-client==2.157.0",
+    "python-dotenv==1.0.1",
+    "peewee==3.17.8",
+    "pandas==2.2.3",
+    "apprise==1.9.1"
+]
 
 
 [build-system]
