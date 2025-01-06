@@ -55,6 +55,28 @@ jobs:
           tags: |
             latest
             ${{ github.event.release.tag_name }}
+            
+      - name: Get repository description
+        id: get-repo-description
+        uses: actions/github-script@v7.0.1
+        if: github.event_name == 'release'
+        with:
+          script: |
+            const repo = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            return repo.data.description;
+          result-encoding: string
+
+      - name: Update Docker Description and README
+        uses: peter-evans/dockerhub-description@v4.0.0
+        if: github.event_name == 'release'
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: jnstockley/bsn
+          short-description: ${{ steps.get-repo-description.outputs.result }}
 
       - name: Extract metadata for main branch
         id: meta_main
