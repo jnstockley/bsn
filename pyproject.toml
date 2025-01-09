@@ -12,7 +12,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "peewee==3.17.8",
     "pandas==2.2.3",
-    "apprise==1.9.1"
+    "apprise==1.9.2"
 ]
 
 
