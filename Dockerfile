@@ -9,12 +9,11 @@ COPY . /bsn
 
 WORKDIR /bsn/
 
-RUN poetry check && \
+RUN poetry lock && \
+    poetry check && \
     poetry install
 
 FROM jnstockley/poetry:2.0.0-python3.13.1
-
-ENV PYTHONPATH=/bsn:$PYTHONPATH
 
 COPY --from=build /root/.cache/pypoetry/virtualenvs  /root/.cache/pypoetry/virtualenvs
 
