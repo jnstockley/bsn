@@ -5,5 +5,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "baseBranches": [
     "dev"
+  ],
+  "assignees": [
+    "jnstockley"
   ]
 }
