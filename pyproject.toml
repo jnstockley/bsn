@@ -6,7 +6,7 @@ authors = [
     {name = "Jack Stockley", email = "jack@jstockley.com"}
 ]
 readme = "README.md"
-requires-python = "3.13.1"
+requires-python = "==3.13.1"
 dependencies = [
     "google-api-python-client==2.160.0",
     "python-dotenv==1.0.1",
@@ -19,3 +19,7 @@ dependencies = [
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "==0.9.4"
+
