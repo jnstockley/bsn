@@ -11,7 +11,7 @@ WORKDIR /bsn/
 
 RUN poetry lock && \
     poetry check && \
-    poetry install
+    poetry install --without=dev
 
 FROM jnstockley/poetry:2.0.1-python3.13.1
 
