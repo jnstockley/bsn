@@ -11,3 +11,4 @@ Dockerfile
 logs/
 docs/
 test/
+lint.sh

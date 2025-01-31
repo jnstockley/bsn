@@ -14,9 +14,11 @@ def send_youtube_channels_notifications(channels: list[dict], video: dict = None
         title = f"{','.join([channel['snippet']['title'] for channel in channels])} have uploaded new videos to YouTube!"
         body = "Check them out here: https://www.youtube.com/feed/subscriptions"
     elif video:
-        video_title = video['snippet']['title']
+        video_title = video["snippet"]["title"]
         video_url = f"https://www.youtube.com/watch?v={video['snippet']['resourceId']['videoId']}"
-        title = f"{channels[0]['snippet']['title']} has uploaded a new video to YouTube!"
+        title = (
+            f"{channels[0]['snippet']['title']} has uploaded a new video to YouTube!"
+        )
         body = f"{video_title}\n{video_url}"
     else:
         logger.warning("No video found")

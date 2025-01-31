@@ -14,6 +14,29 @@ on:
       - pyproject.toml
 
 jobs:
+  lint:
+    name: Run linters
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          check-latest: true
+
+      - name: Install Poetry and Dependencies
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          poetry lock
+          poetry check
+          poetry install
+
+      - name: Lint
+        run: ./lint.sh
+
   push_to_registries:
     if: github.event_name == 'release' || github.base_ref == 'main'
     name: Push Docker image to multiple registries
