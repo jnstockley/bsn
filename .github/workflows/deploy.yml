@@ -38,6 +38,7 @@ jobs:
         run: ./lint.sh
 
   push_to_registries:
+    needs: lint
     if: github.event_name == 'release' || github.base_ref == 'main'
     name: Push Docker image to multiple registries
     runs-on: ubuntu-latest
