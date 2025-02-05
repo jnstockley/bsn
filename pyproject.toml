@@ -10,7 +10,7 @@ requires-python = "==3.13.1"
 dependencies = [
     "google-api-python-client==2.160.0",
     "python-dotenv==1.0.1",
-    "peewee==3.17.8",
+    "peewee==3.17.9",
     "pandas==2.2.3",
     "apprise==1.9.2"
 ]
