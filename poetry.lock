@@ -490,13 +490,13 @@ xml = ["lxml (>=4.9.2)"]
 
 [[package]]
 name = "peewee"
-version = "3.17.8"
+version = "3.17.9"
 description = "a little orm"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "peewee-3.17.8.tar.gz", hash = "sha256:ce1d05db3438830b989a1b9d0d0aa4e7f6134d5f6fd57686eeaa26a3e6485a8c"},
+    {file = "peewee-3.17.9.tar.gz", hash = "sha256:fe15cd001758e324c8e3ca8c8ed900e7397c2907291789e1efc383e66b9bc7a8"},
 ]
 
 [[package]]
@@ -825,4 +825,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "556eb3ed727b67b73a4908af196b278934bbf1a195e3465344765f416d3318c3"
+content-hash = "76f4880b6f642e16fa264d11bd6f812d6b608c2a5d0ba55389c5455e3106724a"
