@@ -1,4 +1,4 @@
-FROM jnstockley/poetry:2.0.1-python3.13.1@sha256:639d51cbf1a730d117a4067b2558b1be2748f1a6dbd45347c6d22c18ec5a715e AS build
+FROM jnstockley/poetry:2.0.1-python3.13.2 AS build
 
 RUN apk update && \
     apk upgrade && \
@@ -13,7 +13,7 @@ RUN poetry lock && \
     poetry check && \
     poetry install --without=dev
 
-FROM jnstockley/poetry:2.0.1-python3.13.1@sha256:639d51cbf1a730d117a4067b2558b1be2748f1a6dbd45347c6d22c18ec5a715e
+FROM jnstockley/poetry:2.0.1-python3.13.2
 
 COPY --from=build /root/.cache/pypoetry/virtualenvs  /root/.cache/pypoetry/virtualenvs
 
