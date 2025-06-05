@@ -11,7 +11,7 @@ dependencies = [
     "google-api-python-client==2.171.0",
     "python-dotenv==1.1.0",
     "peewee==3.18.1",
-    "pandas==2.2.3",
+    "pandas==2.3.0",
     "apprise==1.9.3"
 ]
 
