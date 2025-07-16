@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "google-api-python-client==2.176.0",
-    "python-dotenv==1.1.0",
+    "python-dotenv==1.1.1",
     "peewee==3.18.2",
     "pandas==2.3.0",
     "apprise==1.9.3"
