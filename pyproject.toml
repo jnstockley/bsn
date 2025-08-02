@@ -12,7 +12,7 @@ dependencies = [
     "python-dotenv==1.1.1",
     "peewee==3.18.2",
     "pandas==2.3.1",
-    "apprise==1.9.3"
+    "apprise==1.9.4"
 ]
 
 
@@ -21,5 +21,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "==0.12.5"
+ruff = "==0.12.7"
 
