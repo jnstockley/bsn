@@ -3,7 +3,7 @@
     "config:recommended"
   ],
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "baseBranches": [
+  "baseBranchPatterns": [
     "dev"
   ],
   "assignees": [
