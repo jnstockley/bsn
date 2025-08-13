@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: bsn-dev
     volumes:
-      - ./data:/bsn/data
-      - ./logs:/bsn/logs
+      - ./data:/app/data
+      - ./logs:/app/logs
     env_file:
       - .env
     restart: always
