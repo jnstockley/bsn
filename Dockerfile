@@ -1,24 +1,22 @@
-FROM jnstockley/poetry:2.1.2-python3.13.2 AS build
+FROM python:3.13.6-alpine
 
-RUN apk update && \
-    apk upgrade && \
-    apk add alpine-sdk python3-dev musl-dev libffi-dev gcc curl openssl-dev cargo pkgconfig && \
-    mkdir /bsn
+ARG VERSION=0.0.0.dev
 
-COPY . /bsn
+COPY . /app
 
-WORKDIR /bsn/
+RUN adduser -S app && \
+    chown -R app /app
+USER app
 
-RUN poetry lock && \
-    poetry check && \
-    poetry install --without=dev
+WORKDIR /app
 
-FROM jnstockley/poetry:2.1.2-python3.13.2
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-COPY --from=build /root/.cache/pypoetry/virtualenvs  /root/.cache/pypoetry/virtualenvs
+RUN sed -i "s/^version = .*/version = \"${VERSION}\"/" /app/pyproject.toml
 
-COPY --from=build /bsn /bsn
+RUN uv sync --frozen --no-cache
 
-WORKDIR /bsn/
+ENV PATH=/app/.venv/bin:$PATH
+ENV PYTHONPATH=src:$PYTHONPATH
 
-ENTRYPOINT ["poetry", "run", "python", "src/bsn.py"]
+ENTRYPOINT ["uv", "run", "src/main.py"]
