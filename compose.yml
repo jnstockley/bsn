@@ -1,10 +1,13 @@
+# dclint disable service-image-require-explicit-tag
+---
+name: BSN
 services:
   bsn:
-    container_name: bsn
     image: jnstockley/bsn:latest
+    container_name: bsn
     volumes:
       - ./data:/bsn/data
       - ./logs:/bsn/logs
     env_file:
       - .env
-    restart: always
+    restart: unless-stopped

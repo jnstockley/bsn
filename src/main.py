@@ -31,8 +31,7 @@ def initialize():
         create_tables()
         populate_tables()
 
-
-if __name__ == "__main__":
+def main():
     logger.info("Staring BSN...")
     initialize()
     interval_between_checks: int = calculate_interval_between_cycles()
@@ -41,3 +40,6 @@ if __name__ == "__main__":
         check_for_new_videos()
         logger.info(f"Sleeping for {interval_between_checks} seconds...")
         time.sleep(interval_between_checks)
+
+if __name__ == "__main__":
+    main()
