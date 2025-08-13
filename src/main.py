@@ -18,7 +18,7 @@ def create_tables():
 
 def populate_tables():
     with database:
-        file = "../data/subscriptions.csv"
+        file = "./data/subscriptions.csv"
         logger.info(f"Importing YouTube Subscriptions from {file}")
         import_subscriptions(file)
 
