@@ -13,19 +13,20 @@ from notifications.notifications import send_youtube_channels_notifications
 from src import logger
 
 
-def import_subscriptions(subscriptions_file: str):
-    if os.path.exists(subscriptions_file):
-        subscriptions: list[str] = pd.read_csv(subscriptions_file)[
-            "Channel Id"
-        ].tolist()
-        channels = get_channels_by_id(subscriptions)
-        for channel in channels:
-            YouTubeChannel.create(
-                id=channel["id"], num_videos=int(channel["statistics"]["videoCount"])
+def import_subscriptions(yt_df: pd.DataFrame):
+    channel_ids = yt_df["Channel Id"].tolist()
+    channels = get_channels_by_id(channel_ids)
+
+    for channel in channels:
+        channel_id = channel["id"]
+        if not YouTubeChannel.select().where(YouTubeChannel.id == channel_id).exists():
+            logger.info(
+                f"Importing channel {channel_id} with {channel['statistics']['videoCount']} videos"
             )
-    else:
-        logger.error(f"File {subscriptions_file} not found")
-        return
+            YouTubeChannel.create(
+                id=channel["id"],
+                num_videos=int(channel["statistics"]["videoCount"]),
+            )
 
 
 def get_channels_by_id(channel_ids: list[str]) -> list[dict] | None:
