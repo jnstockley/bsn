@@ -12,6 +12,7 @@ from notifications.notifications import send_youtube_channels_notifications
 
 from src import logger
 
+
 def import_subscriptions(yt_df: pd.DataFrame):
     channel_ids = yt_df["Channel Id"].tolist()
     channels = get_channels_by_id(channel_ids)
@@ -19,11 +20,14 @@ def import_subscriptions(yt_df: pd.DataFrame):
     for channel in channels:
         channel_id = channel["id"]
         if not YouTubeChannel.select().where(YouTubeChannel.id == channel_id).exists():
-            logger.info(f"Importing channel {channel_id} with {channel['statistics']['videoCount']} videos")
+            logger.info(
+                f"Importing channel {channel_id} with {channel['statistics']['videoCount']} videos"
+            )
             YouTubeChannel.create(
                 id=channel["id"],
                 num_videos=int(channel["statistics"]["videoCount"]),
             )
+
 
 def get_channels_by_id(channel_ids: list[str]) -> list[dict] | None:
     channels: list[dict] = []

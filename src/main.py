@@ -13,7 +13,10 @@ from youtube.youtube import (
     calculate_interval_between_cycles,
 )
 
-def read_csv_file(file_path: str, ) -> DataFrame:
+
+def read_csv_file(
+    file_path: str,
+) -> DataFrame:
     """
     Reads a CSV file and returns a DataFrame or raises an error if the file is not found or is empty.
     :param file_path: str
@@ -30,18 +33,25 @@ def read_csv_file(file_path: str, ) -> DataFrame:
 
     return df
 
+
 def create_tables():
     with database:
         logger.info("Creating tables...")
         database.create_tables([YouTubeChannel])
 
+
 def update_tables(yt_df: pd.DataFrame):
-    logger.info("Ensuring YouTube Channels table is up to date with subscriptions file...")
+    logger.info(
+        "Ensuring YouTube Channels table is up to date with subscriptions file..."
+    )
     with database:
         import_subscriptions(yt_df)
 
 
-def initialize(yt_subscriptions_file: str = "./data/subscriptions.csv", sqlite_db: str = "./data/bsn.db"):
+def initialize(
+    yt_subscriptions_file: str = "./data/subscriptions.csv",
+    sqlite_db: str = "./data/bsn.db",
+):
     yt_df = read_csv_file(yt_subscriptions_file)
     database.database = sqlite_db
     if not database.table_exists("youtubechannel"):
@@ -49,6 +59,7 @@ def initialize(yt_subscriptions_file: str = "./data/subscriptions.csv", sqlite_d
         create_tables()
 
     update_tables(yt_df)
+
 
 def main():
     logger.info("Staring BSN...")
@@ -59,6 +70,7 @@ def main():
         check_for_new_videos()
         logger.info(f"Sleeping for {interval_between_checks} seconds...")
         time.sleep(interval_between_checks)
+
 
 if __name__ == "__main__":
     main()
