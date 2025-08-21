@@ -7,7 +7,7 @@ requires-python = ">=3.13, <4.0"
 dependencies = [
     "apprise==1.9.4",
     "google-api-python-client==2.179.0",
-    "pandas==2.3.1",
+    "pandas==2.3.2",
     "peewee==3.18.2",
     "python-dotenv==1.1.1",
 ]
