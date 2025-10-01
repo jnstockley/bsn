@@ -5,7 +5,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.13, <4.0"
 dependencies = [
-    "apprise==1.9.4",
+    "apprise==1.9.5",
     "google-api-python-client==2.183.0",
     "pandas==2.3.3",
     "peewee==3.18.2",
