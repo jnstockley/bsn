@@ -1,22 +1,32 @@
-FROM python:3.13.7-alpine
+FROM python:3.13.7 AS  build
 
 ARG VERSION=0.0.0.dev
-
-COPY . /app
-
-RUN adduser -S app && \
-    chown -R app /app
-USER app
 
 WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN sed -i "s/^version = .*/version = \"${VERSION}\"/" /app/pyproject.toml
+COPY ./pyproject.toml .
+COPY ./uv.lock .
 
-RUN uv sync --frozen --no-cache
+RUN uv version ${VERSION} && \
+    uv sync --frozen --no-cache --no-dev
 
-ENV PATH=/app/.venv/bin:$PATH
-ENV PYTHONPATH=src:$PYTHONPATH
+FROM python:3.13.7-slim
 
-ENTRYPOINT ["uv", "run", "src/main.py"]
+RUN adduser app
+
+USER app
+
+WORKDIR /app
+
+COPY . .
+COPY --from=build /app/.venv .venv
+COPY --from=build /app/pyproject.toml .
+COPY --from=build /app/uv.lock .
+
+# Set up environment variables for production
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app/src/:$PYTHONPATH
+
+ENTRYPOINT ["python", "src/main.py"]
