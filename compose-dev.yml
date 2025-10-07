@@ -11,7 +11,10 @@ services:
       - ./logs:/app/logs
     env_file:
       - .env
-    restart: always
+    # Add ports if needed
+    # ports:
+    #   - '0.0.0.0:5001:5000'
+    restart: unless-stopped
     # Add healthcheck if needed
     # healthcheck:
     #   test: curl --fail http://localhost:5000/health-check || exit 1
