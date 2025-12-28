@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os.path
 import time
 
@@ -70,7 +71,23 @@ def main():
         check_for_new_videos()
         logger.info(f"Sleeping for {interval_between_checks} seconds...")
         time.sleep(interval_between_checks)
+=======
+import sys
+
+from dotenv import load_dotenv
+
+from util.healthcheck import healthcheck
+from util.logging import logger
+
+
+def main():
+    logger.info("Hello from python-starter!")
+>>>>>>> external/main
 
 
 if __name__ == "__main__":
-    main()
+    load_dotenv()
+    if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
+        healthcheck()
+    else:
+        main()
