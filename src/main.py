@@ -1,4 +1,8 @@
-<<<<<<< HEAD
+import sys
+
+from dotenv import load_dotenv
+
+from util.healthcheck import healthcheck
 import os.path
 import time
 
@@ -7,7 +11,7 @@ from pandas import DataFrame
 
 from models import database
 from models.models import YouTubeChannel
-from src import logger
+from util.logging import logger
 from youtube.youtube import (
     import_subscriptions,
     check_for_new_videos,
@@ -71,18 +75,6 @@ def main():
         check_for_new_videos()
         logger.info(f"Sleeping for {interval_between_checks} seconds...")
         time.sleep(interval_between_checks)
-=======
-import sys
-
-from dotenv import load_dotenv
-
-from util.healthcheck import healthcheck
-from util.logging import logger
-
-
-def main():
-    logger.info("Hello from python-starter!")
->>>>>>> external/main
 
 
 if __name__ == "__main__":
