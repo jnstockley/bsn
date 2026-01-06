@@ -9,8 +9,7 @@ from googleapiclient.errors import HttpError
 from auth.youtube import get_youtube_service
 from models.models import YouTubeChannel
 from notifications.notifications import send_youtube_channels_notifications
-
-from src import logger
+from util.logging import logger
 
 
 def import_subscriptions(yt_df: pd.DataFrame):

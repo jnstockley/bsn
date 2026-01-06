@@ -1,7 +1,7 @@
 from apprise import apprise
-from src import logger
 
 from notifications import apprise_urls
+from util.logging import logger
 
 
 def send_youtube_channels_notifications(channels: list[dict], video: dict = None):
