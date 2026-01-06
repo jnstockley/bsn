@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from googleapiclient.discovery import build
 
-from src import logger
+from util.logging import logger
 
 load_dotenv()
 

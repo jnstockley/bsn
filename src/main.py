@@ -1,3 +1,8 @@
+import sys
+
+from dotenv import load_dotenv
+
+from util.healthcheck import healthcheck
 import os.path
 import time
 
@@ -6,7 +11,7 @@ from pandas import DataFrame
 
 from models import database
 from models.models import YouTubeChannel
-from src import logger
+from util.logging import logger
 from youtube.youtube import (
     import_subscriptions,
     check_for_new_videos,
@@ -73,4 +78,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    load_dotenv()
+    if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
+        healthcheck()
+    else:
+        main()
