@@ -8,7 +8,7 @@ dependencies = [
     "apprise==1.9.6",
     "google-api-python-client==2.187.0",
     "pandas==2.3.3",
-    "peewee==3.18.3",
+    "peewee==3.19.0",
     "python-dotenv==1.2.1",
 ]
 license-files = ["LICENSE"]
