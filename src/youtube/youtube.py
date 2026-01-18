@@ -1,39 +1,62 @@
 import math
-import os
 from datetime import datetime, timedelta
 
-import pandas as pd
+from googleapiclient.discovery import Resource
 
 from googleapiclient.errors import HttpError
 
-from auth.youtube import get_youtube_service
-from models.models import YouTubeChannel
+from models.models import YouTubeChannel, OAuthCredentials
 from notifications.notifications import send_youtube_channels_notifications
 from util.logging import logger
 
 
-def import_subscriptions(yt_df: pd.DataFrame):
-    channel_ids = yt_df["Channel Id"].tolist()
-    channels = get_channels_by_id(channel_ids)
+def pull_youtube_subscriptions(youtube: Resource):
+    request = youtube.subscriptions().list(
+        part="snippet,contentDetails",
+        mine=True,
+        maxResults=50,
+    )
+    response = request.execute()
+
+    channels = response["items"]
+
+    while response["nextPageToken"] if "nextPageToken" in response else None:
+        request = youtube.subscriptions().list(
+            part="snippet,contentDetails",
+            mine=True,
+            maxResults=50,
+            pageToken=response["nextPageToken"],
+        )
+        response = request.execute()
+        channels.extend(response["items"])
+
+    assert len(channels) == response["pageInfo"]["totalResults"]
 
     for channel in channels:
-        channel_id = channel["id"]
+        channel_id = channel["snippet"]["resourceId"]["channelId"]
         if not YouTubeChannel.select().where(YouTubeChannel.id == channel_id).exists():
             logger.info(
-                f"Importing channel {channel_id} with {channel['statistics']['videoCount']} videos"
+                f"Importing channel {channel_id} with {channel['contentDetails']['totalItemCount']} videos"
             )
             YouTubeChannel.create(
-                id=channel["id"],
-                num_videos=int(channel["statistics"]["videoCount"]),
+                id=channel_id,
+                num_videos=int(channel["contentDetails"]["totalItemCount"]),
             )
 
+    # delete channels that are no longer subscribed
+    existing_channel_ids = [
+        channel["snippet"]["resourceId"]["channelId"] for channel in channels
+    ]
+    for channel in YouTubeChannel.select():
+        if channel.id not in existing_channel_ids:
+            logger.info(f"Deleting channel {channel.id} as it is no longer subscribed")
+            YouTubeChannel.delete_by_id(channel.id)
 
-def get_channels_by_id(channel_ids: list[str]) -> list[dict] | None:
+
+def get_channels_by_id(youtube: Resource, channel_ids: list[str]) -> list[dict] | None:
     channels: list[dict] = []
 
     for channel_str in _chunk_list(channel_ids):
-        youtube = get_youtube_service()
-
         request = youtube.channels().list(part="statistics,snippet", id=channel_str)
 
         try:
@@ -83,23 +106,21 @@ def update_channels(channels: list[dict]):
         ).where(YouTubeChannel.id == channel["id"]).execute()
 
 
-def check_for_new_videos():
+def check_for_new_videos(youtube: Resource):
     channels = YouTubeChannel.select()
-    current_channels = get_channels_by_id([channel.id for channel in channels])
+    current_channels = get_channels_by_id(youtube, [channel.id for channel in channels])
     new_video_channels = get_channels_with_new_videos(channels, current_channels)
     update_channels(new_video_channels)
 
     video = None
     if len(new_video_channels) > 0:
         if len(new_video_channels) == 1:
-            video = get_most_recent_video(new_video_channels[0]["id"])
+            video = get_most_recent_video(youtube, new_video_channels[0]["id"])
 
         send_youtube_channels_notifications(new_video_channels, video)
 
 
-def get_most_recent_video(channel_id: str) -> dict | None:
-    youtube = get_youtube_service()
-
+def get_most_recent_video(youtube: Resource, channel_id: str) -> dict | None:
     playlist_id = f"UU{channel_id[2:]}"
 
     request = youtube.playlistItems().list(
@@ -134,7 +155,7 @@ def get_most_recent_video(channel_id: str) -> dict | None:
 
 def calculate_interval_between_cycles():
     num_channels: int = len(YouTubeChannel.select())
-    num_api_keys: int = len(os.environ["YOUTUBE_API_KEYS"].split(","))
+    num_api_keys: int = len(OAuthCredentials.select())
     max_requests_per_key_per_day = 10000
     total_requests_allowed_per_day = num_api_keys * max_requests_per_key_per_day
     requests_per_cycle = math.ceil((num_channels + 1) / 50)
