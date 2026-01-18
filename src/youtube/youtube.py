@@ -1,5 +1,4 @@
 import math
-import os
 from datetime import datetime, timedelta
 
 from googleapiclient.discovery import Resource
@@ -45,7 +44,9 @@ def pull_youtube_subscriptions(youtube: Resource):
             )
 
     # delete channels that are no longer subscribed
-    existing_channel_ids = [channel["snippet"]["resourceId"]["channelId"] for channel in channels]
+    existing_channel_ids = [
+        channel["snippet"]["resourceId"]["channelId"] for channel in channels
+    ]
     for channel in YouTubeChannel.select():
         if channel.id not in existing_channel_ids:
             logger.info(f"Deleting channel {channel.id} as it is no longer subscribed")
