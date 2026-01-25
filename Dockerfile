@@ -24,6 +24,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app/src/:$PYTHONPATH
+ENV DATA_DIR=/app/data
+ENV LOG_DIR=/app/logs
 
 WORKDIR /app
 
@@ -34,5 +36,7 @@ COPY --from=build /app/uv.lock .
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
     CMD ["python", "src/main.py", "healthcheck"]
+
+USER nonroot
 
 ENTRYPOINT ["python", "src/main.py"]
