@@ -24,10 +24,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH=/app/src/:$PYTHONPATH
-<<<<<<< HEAD
 ENV DATA_DIR=/app/data
-=======
->>>>>>> external/main
 ENV LOG_DIR=/app/logs
 
 WORKDIR /app
