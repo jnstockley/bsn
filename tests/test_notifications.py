@@ -46,7 +46,9 @@ class TestNotifications(TestCase):
 
         # Verify notify was called with correct title and body
         expected_title = "Test Channel has uploaded a new video to YouTube!"
-        expected_body = "Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        expected_body = (
+            "Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
         mock_apprise_instance.notify.assert_called_once_with(
             title=expected_title, body=expected_body
         )
@@ -68,8 +70,12 @@ class TestNotifications(TestCase):
         mock_apprise_instance.add.assert_called_once_with("test://localhost")
 
         # Verify notify was called with correct title and body
-        expected_title = "Test Channel,Another Channel have uploaded new videos to YouTube!"
-        expected_body = "Check them out here: https://www.youtube.com/feed/subscriptions"
+        expected_title = (
+            "Test Channel,Another Channel have uploaded new videos to YouTube!"
+        )
+        expected_body = (
+            "Check them out here: https://www.youtube.com/feed/subscriptions"
+        )
         mock_apprise_instance.notify.assert_called_once_with(
             title=expected_title, body=expected_body
         )
@@ -129,7 +135,9 @@ class TestNotifications(TestCase):
 
         # Verify notify was called with all three channel names
         expected_title = "Test Channel,Another Channel,Third Channel have uploaded new videos to YouTube!"
-        expected_body = "Check them out here: https://www.youtube.com/feed/subscriptions"
+        expected_body = (
+            "Check them out here: https://www.youtube.com/feed/subscriptions"
+        )
         mock_apprise_instance.notify.assert_called_once_with(
             title=expected_title, body=expected_body
         )
@@ -151,7 +159,9 @@ class TestNotifications(TestCase):
         send_youtube_channels_notifications([self.sample_channel], special_video)
 
         # Verify notify was called with the special characters preserved
-        expected_body = "Test Video: Amazing & Cool! (2026)\nhttps://www.youtube.com/watch?v=abc123"
+        expected_body = (
+            "Test Video: Amazing & Cool! (2026)\nhttps://www.youtube.com/watch?v=abc123"
+        )
         mock_apprise_instance.notify.assert_called_once()
         call_args = mock_apprise_instance.notify.call_args
         assert call_args[1]["body"] == expected_body

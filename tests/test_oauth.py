@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from unittest import TestCase
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import requests
 from google.auth.credentials import TokenState
@@ -132,7 +132,10 @@ class TestOAuth(TestCase):
         self.assertIsNone(result)
 
     @patch("auth.oauth.get_credentials")
-    @patch.dict("os.environ", {"OAUTH_CLIENT_ID": "env_client_id", "OAUTH_CLIENT_SECRET": "env_secret"})
+    @patch.dict(
+        "os.environ",
+        {"OAUTH_CLIENT_ID": "env_client_id", "OAUTH_CLIENT_SECRET": "env_secret"},
+    )
     def test_get_authenticated_youtube_service_uses_env_vars(self, mock_get_creds):
         """Test that service uses environment variables when params not provided"""
         mock_get_creds.return_value = None
@@ -239,7 +242,7 @@ class TestOAuth(TestCase):
         with patch("auth.oauth.time.sleep"):
             with patch("auth.oauth.time.time", side_effect=[0, 1000]):
                 # Will timeout
-                result = run_auth_flow(client_id=None)
+                run_auth_flow(client_id=None)
 
         # Should have attempted with DB client_id
         mock_post.assert_called()
@@ -493,7 +496,9 @@ class TestOAuth(TestCase):
         self.assertEqual(result, 1)
 
     @patch("auth.oauth.OAuthCredentials")
-    def test_save_credentials_to_db_handles_scopes_join_exception(self, mock_oauth_creds):
+    def test_save_credentials_to_db_handles_scopes_join_exception(
+        self, mock_oauth_creds
+    ):
         """Test saving credentials when joining scopes fails"""
         mock_row = MagicMock()
         mock_row.id = 1

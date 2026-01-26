@@ -76,6 +76,7 @@ class TestHealthcheck(TestCase):
         self, mock_logger, mock_database, mock_oauth
     ):
         """Test healthcheck fails when oauth_credentials table doesn't exist"""
+
         # Mock database table existence - oauth_credentials missing
         def table_exists_side_effect(table):
             if table == "youtubechannel":

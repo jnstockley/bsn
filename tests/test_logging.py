@@ -90,9 +90,7 @@ class TestLogging(TestCase):
 
     def test_logger_formatting(self):
         """Test that logger uses correct format string"""
-        expected_format = (
-            "%(asctime)s - %(filename)s:%(funcName)s:%(lineno)d - %(levelname)s - %(message)s"
-        )
+        expected_format = "%(asctime)s - %(filename)s:%(funcName)s:%(lineno)d - %(levelname)s - %(message)s"
 
         formatter = logging.Formatter(expected_format)
         self.assertEqual(formatter._fmt, expected_format)

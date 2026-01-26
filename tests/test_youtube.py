@@ -45,11 +45,10 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
-        with patch.object(
-            YouTubeChannel, "select"
-        ) as mock_select, patch.object(
-            YouTubeChannel, "create"
-        ) as mock_create:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_select,
+            patch.object(YouTubeChannel, "create") as mock_create,
+        ):
             # Mock the query chain: select().where().exists()
             mock_query = MagicMock()
             mock_query.where.return_value.exists.return_value = False
@@ -91,11 +90,10 @@ class TestYouTube(TestCase):
         mock_request.execute.side_effect = [mock_response_page1, mock_response_page2]
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
-        with patch.object(
-            YouTubeChannel, "select"
-        ) as mock_select, patch.object(
-            YouTubeChannel, "create"
-        ) as mock_create:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_select,
+            patch.object(YouTubeChannel, "create") as mock_create,
+        ):
             # Mock the query chain: select().where().exists()
             mock_query = MagicMock()
             mock_query.where.return_value.exists.return_value = False
@@ -127,13 +125,11 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id_2
 
-        with patch.object(
-            YouTubeChannel, "select"
-        ) as mock_select, patch.object(
-            YouTubeChannel, "delete_by_id"
-        ) as mock_delete, patch.object(
-            YouTubeChannel, "create"
-        ) as mock_create:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_select,
+            patch.object(YouTubeChannel, "delete_by_id") as mock_delete,
+            patch.object(YouTubeChannel, "create"),
+        ):
             # Mock the query chain: select().where().exists()
             mock_query = MagicMock()
             mock_query.where.return_value.exists.return_value = False
@@ -165,11 +161,10 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
-        with patch.object(
-            YouTubeChannel, "select"
-        ) as mock_select, patch.object(
-            YouTubeChannel, "create"
-        ) as mock_create:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_select,
+            patch.object(YouTubeChannel, "create") as mock_create,
+        ):
             # Mock the query chain: select().where().exists()
             mock_query = MagicMock()
             mock_query.where.return_value.exists.return_value = True
@@ -241,10 +236,7 @@ class TestYouTube(TestCase):
         mock_request = MagicMock()
         mock_request.uri = "https://youtube.com/test"
 
-        http_error = HttpError(
-            resp=MagicMock(status=403),
-            content=b"Quota exceeded"
-        )
+        http_error = HttpError(resp=MagicMock(status=403), content=b"Quota exceeded")
         mock_request.execute.side_effect = http_error
         self.mock_youtube.channels().list.return_value = mock_request
 
@@ -564,8 +556,7 @@ class TestYouTube(TestCase):
         mock_request.uri = "https://youtube.com/test"
 
         http_error = HttpError(
-            resp=MagicMock(status=404),
-            content=b"Playlist not found"
+            resp=MagicMock(status=404), content=b"Playlist not found"
         )
         mock_request.execute.side_effect = http_error
         self.mock_youtube.playlistItems().list.return_value = mock_request
@@ -581,9 +572,10 @@ class TestYouTube(TestCase):
         mock_channel.id = self.sample_channel_id
         mock_cred = MagicMock()
 
-        with patch.object(YouTubeChannel, "select") as mock_channel_select, patch.object(
-            OAuthCredentials, "select"
-        ) as mock_cred_select:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_channel_select,
+            patch.object(OAuthCredentials, "select") as mock_cred_select,
+        ):
             mock_channel_select.return_value = [mock_channel]
             mock_cred_select.return_value = [mock_cred]
 
@@ -600,9 +592,10 @@ class TestYouTube(TestCase):
         mock_channels = [MagicMock() for _ in range(100)]
         mock_creds = [MagicMock() for _ in range(2)]
 
-        with patch.object(YouTubeChannel, "select") as mock_channel_select, patch.object(
-            OAuthCredentials, "select"
-        ) as mock_cred_select:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_channel_select,
+            patch.object(OAuthCredentials, "select") as mock_cred_select,
+        ):
             mock_channel_select.return_value = mock_channels
             mock_cred_select.return_value = mock_creds
 
@@ -620,9 +613,10 @@ class TestYouTube(TestCase):
         mock_channels = [MagicMock() for _ in range(500)]
         mock_creds = [MagicMock()]
 
-        with patch.object(YouTubeChannel, "select") as mock_channel_select, patch.object(
-            OAuthCredentials, "select"
-        ) as mock_cred_select:
+        with (
+            patch.object(YouTubeChannel, "select") as mock_channel_select,
+            patch.object(OAuthCredentials, "select") as mock_cred_select,
+        ):
             mock_channel_select.return_value = mock_channels
             mock_cred_select.return_value = mock_creds
 
