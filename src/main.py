@@ -18,14 +18,14 @@ from youtube.youtube import (
 
 def main():
     logger.info("Staring BSN...")
-    if not database.table_exists("youtubechannel") or not database.table_exists(
-        "oauthcredentials"
-    ):
+    if not database.table_exists("youtubechannel"):
         logger.info("YouTube Channels table does not exist. Creating table...")
         database.create_tables([YouTubeChannel])
-    if not database.table_exists("oauthcredentials"):
+        database.commit()
+    if not database.table_exists("oauth_credentials"):
         logger.info("OAuth Credentials table does not exist. Creating table...")
         database.create_tables([OAuthCredentials])
+        database.commit()
         oauth.get_authenticated_youtube_service(force_auth=True)
 
     interval_between_checks: int = calculate_interval_between_cycles()
