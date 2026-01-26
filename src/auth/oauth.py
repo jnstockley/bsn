@@ -126,7 +126,7 @@ def run_auth_flow(
         try:
             t_resp = requests.post(TOKEN_URL, data=token_data, timeout=10)
         except requests.RequestException as exc:
-            logger.error("Network error while polling token endpoint:", exc)
+            logger.error("Network error while polling token endpoint: %s", exc)
             time.sleep(interval)
             continue
 
@@ -167,11 +167,11 @@ def run_auth_flow(
             time.sleep(interval)
             continue
         if error in ("access_denied", "expired_token"):
-            logger.error("Authorization failed:", error)
+            logger.error("Authorization failed: %s", error)
             return None
 
         # unknown error -> raise
-        logger.error("Unexpected token endpoint response:", err)
+        logger.error("Unexpected token endpoint response: %s", err)
         return None
 
 
@@ -245,7 +245,7 @@ def load_credentials_from_db(user_id: Optional[str] = None) -> Optional[Credenti
         creds.expiry = row.expiry.astimezone(timezone.utc).replace(tzinfo=None)
         return creds
     except Exception as exc:
-        logger.error("Error loading credentials from DB:", exc)
+        logger.error("Error loading credentials from DB: %s", exc)
         return None
 
 
@@ -272,7 +272,7 @@ def get_credentials(user_id: Optional[str] = None) -> Optional[Credentials]:
             )
         except Exception as exc:
             # likely invalid_grant or revoked token
-            logger.error("Failed to refresh credentials:", exc)
+            logger.error("Failed to refresh credentials: %s", exc)
             try:
                 # delete the row
                 if user_id:
@@ -300,8 +300,8 @@ def revoke_credentials(creds: Credentials) -> bool:
                 OAuthCredentials.client_id == creds.client_id
             ).execute()
             return True
-        logger.error("Failed to revoke token:", resp.status_code, resp.text)
+        logger.error("Failed to revoke token: %s %s", resp.status_code, resp.text)
         return False
     except requests.RequestException as exc:
-        logger.error("Network error revoking token:", exc)
+        logger.error("Network error revoking token: %s", exc)
         return False
