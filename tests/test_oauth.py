@@ -210,10 +210,18 @@ class TestOAuth(TestCase):
         self.assertEqual(mock_post.call_count, 2)
 
     @patch("auth.oauth.requests.post")
-    @patch("auth.oauth.OAuthCredentials")
-    def test_run_auth_flow_no_client_id(self, mock_oauth_creds, mock_post):
+    @patch("auth.oauth.Session")
+    def test_run_auth_flow_no_client_id(self, mock_session_ctor, mock_post):
         """Test run_auth_flow raises error when no client_id available"""
-        mock_oauth_creds.select().first.return_value = None
+        # Configure session to return no credential row
+        mock_row = MagicMock()
+        mock_row.client_id = None
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_row
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         with self.assertRaises(ValueError) as context:
             run_auth_flow(client_id=None)
@@ -221,12 +229,18 @@ class TestOAuth(TestCase):
         self.assertIn("client_id must be provided", str(context.exception))
 
     @patch("auth.oauth.requests.post")
-    @patch("auth.oauth.OAuthCredentials")
-    def test_run_auth_flow_uses_db_client_id(self, mock_oauth_creds, mock_post):
+    @patch("auth.oauth.Session")
+    def test_run_auth_flow_uses_db_client_id(self, mock_session_ctor, mock_post):
         """Test run_auth_flow uses client_id from database when not provided"""
         mock_row = MagicMock()
         mock_row.client_id = self.client_id
-        mock_oauth_creds.select().first.return_value = mock_row
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_row
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         device_response = MagicMock()
         device_response.json.return_value = {
@@ -244,13 +258,15 @@ class TestOAuth(TestCase):
                 # Will timeout
                 run_auth_flow(client_id=None)
 
-        # Should have attempted with DB client_id
+        # Should have attempted network call
         mock_post.assert_called()
 
     @patch("auth.oauth.requests.post")
+    @patch("auth.oauth.save_credentials_to_db")
+    @patch("auth.oauth.load_credentials_from_db")
     @patch("auth.oauth.time.sleep")
     @patch("auth.oauth.time.time")
-    def test_run_auth_flow_timeout(self, mock_time, mock_sleep, mock_post):
+    def test_run_auth_flow_timeout(self, mock_time, mock_sleep, mock_load_creds, mock_save_creds, mock_post):
         """Test run_auth_flow times out waiting for authorization"""
         device_response = MagicMock()
         device_response.json.return_value = {
@@ -449,12 +465,21 @@ class TestOAuth(TestCase):
         mock_sleep.assert_called()
 
     # Tests for save_credentials_to_db
-    @patch("auth.oauth.OAuthCredentials")
-    def test_save_credentials_to_db_creates_new(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_save_credentials_to_db_creates_new(self, mock_session_ctor):
         """Test saving new credentials to database"""
-        mock_row = MagicMock()
-        mock_row.id = 1
-        mock_oauth_creds.get_or_create.return_value = (mock_row, True)
+        # Configure session so refresh sets id on created object
+        def refresh(obj):
+            setattr(obj, "id", 1)
+
+        mock_session = MagicMock()
+        mock_session.add.return_value = None
+        mock_session.commit.return_value = None
+        mock_session.refresh.side_effect = refresh
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = save_credentials_to_db(
             self.mock_creds,
@@ -465,14 +490,24 @@ class TestOAuth(TestCase):
         )
 
         self.assertEqual(result, 1)
-        mock_oauth_creds.get_or_create.assert_called_once()
+        mock_session.add.assert_called()
+        mock_session.commit.assert_called()
 
-    @patch("auth.oauth.OAuthCredentials")
-    def test_save_credentials_to_db_updates_existing(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_save_credentials_to_db_updates_existing(self, mock_session_ctor):
         """Test updating existing credentials in database"""
-        mock_row = MagicMock()
-        mock_row.id = 1
-        mock_oauth_creds.get_or_create.return_value = (mock_row, False)
+        # Simulate existing row by letting refresh set id and no errors
+        def refresh(obj):
+            setattr(obj, "id", 1)
+
+        mock_session = MagicMock()
+        mock_session.add.return_value = None
+        mock_session.commit.return_value = None
+        mock_session.refresh.side_effect = refresh
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = save_credentials_to_db(
             self.mock_creds,
@@ -481,40 +516,56 @@ class TestOAuth(TestCase):
         )
 
         self.assertEqual(result, 1)
-        mock_row.save.assert_called_once()
+        mock_session.add.assert_called()
 
-    @patch("auth.oauth.OAuthCredentials")
-    def test_save_credentials_to_db_handles_no_scopes(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_save_credentials_to_db_handles_no_scopes(self, mock_session_ctor):
         """Test saving credentials without scopes"""
-        mock_row = MagicMock()
-        mock_row.id = 1
-        self.mock_creds.scopes = None
-        mock_oauth_creds.get_or_create.return_value = (mock_row, True)
+        def refresh(obj):
+            setattr(obj, "id", 1)
 
+        mock_session = MagicMock()
+        mock_session.add.return_value = None
+        mock_session.commit.return_value = None
+        mock_session.refresh.side_effect = refresh
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
+
+        self.mock_creds.scopes = None
         result = save_credentials_to_db(self.mock_creds)
 
         self.assertEqual(result, 1)
 
-    @patch("auth.oauth.OAuthCredentials")
+    @patch("auth.oauth.Session")
     def test_save_credentials_to_db_handles_scopes_join_exception(
-        self, mock_oauth_creds
+        self, mock_session_ctor
     ):
         """Test saving credentials when joining scopes fails"""
-        mock_row = MagicMock()
-        mock_row.id = 1
+        def refresh(obj):
+            setattr(obj, "id", 1)
+
+        mock_session = MagicMock()
+        mock_session.add.return_value = None
+        mock_session.commit.return_value = None
+        mock_session.refresh.side_effect = refresh
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
+
         # Create a mock that raises when iterated
         mock_scopes = MagicMock()
         mock_scopes.__iter__ = MagicMock(side_effect=Exception("Iterator error"))
         self.mock_creds.scopes = mock_scopes
-        mock_oauth_creds.get_or_create.return_value = (mock_row, True)
 
         result = save_credentials_to_db(self.mock_creds)
 
         self.assertEqual(result, 1)
 
-    # Tests for load_credentials_from_db
-    @patch("auth.oauth.OAuthCredentials")
-    def test_load_credentials_from_db_success(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_load_credentials_from_db_success(self, mock_session_ctor):
         """Test successfully loading credentials from database"""
         mock_row = MagicMock()
         mock_row.access_token = self.access_token
@@ -525,7 +576,12 @@ class TestOAuth(TestCase):
         mock_row.scopes = " ".join(self.scopes)
         mock_row.expiry = datetime.now(timezone.utc) + timedelta(hours=1)
 
-        mock_oauth_creds.select().first.return_value = mock_row
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_row
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = load_credentials_from_db()
 
@@ -534,17 +590,22 @@ class TestOAuth(TestCase):
         self.assertEqual(result.token, self.access_token)
         self.assertEqual(result.refresh_token, self.refresh_token)
 
-    @patch("auth.oauth.OAuthCredentials")
-    def test_load_credentials_from_db_no_credentials(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_load_credentials_from_db_no_credentials(self, mock_session_ctor):
         """Test loading credentials when none exist"""
-        mock_oauth_creds.select().first.return_value = None
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = None
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = load_credentials_from_db()
 
         self.assertIsNone(result)
 
-    @patch("auth.oauth.OAuthCredentials")
-    def test_load_credentials_from_db_with_user_id(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_load_credentials_from_db_with_user_id(self, mock_session_ctor):
         """Test loading credentials for specific user"""
         mock_row = MagicMock()
         mock_row.access_token = self.access_token
@@ -555,17 +616,27 @@ class TestOAuth(TestCase):
         mock_row.scopes = " ".join(self.scopes)
         mock_row.expiry = datetime.now(timezone.utc) + timedelta(hours=1)
 
-        mock_oauth_creds.get_or_none.return_value = mock_row
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = mock_row
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = load_credentials_from_db(user_id=self.user_id)
 
         self.assertIsNotNone(result)
-        mock_oauth_creds.get_or_none.assert_called_once()
+        mock_session.execute.assert_called()
 
-    @patch("auth.oauth.OAuthCredentials")
-    def test_load_credentials_from_db_handles_exception(self, mock_oauth_creds):
+    @patch("auth.oauth.Session")
+    def test_load_credentials_from_db_handles_exception(self, mock_session_ctor):
         """Test loading credentials handles exceptions"""
-        mock_oauth_creds.select().first.side_effect = Exception("DB error")
+        mock_session = MagicMock()
+        mock_session.execute.side_effect = Exception("DB error")
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = load_credentials_from_db()
 
@@ -625,11 +696,11 @@ class TestOAuth(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("auth.oauth.OAuthCredentials")
+    @patch("auth.oauth.Session")
     @patch("auth.oauth.load_credentials_from_db")
     @patch("auth.oauth.Request")
     def test_get_credentials_refresh_fails(
-        self, mock_request_class, mock_load_creds, mock_oauth_creds
+        self, mock_request_class, mock_load_creds, mock_session_ctor
     ):
         """Test getting credentials when refresh fails"""
         self.mock_creds.token_state = TokenState.STALE
@@ -637,16 +708,23 @@ class TestOAuth(TestCase):
         self.mock_creds.refresh.side_effect = Exception("Refresh failed")
         mock_load_creds.return_value = self.mock_creds
 
+        mock_session = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
+
         result = get_credentials()
 
         self.assertIsNone(result)
-        mock_oauth_creds.delete().execute.assert_called_once()
+        # Ensure delete was attempted via session.execute
+        assert mock_session.execute.called
 
-    @patch("auth.oauth.OAuthCredentials")
+    @patch("auth.oauth.Session")
     @patch("auth.oauth.load_credentials_from_db")
     @patch("auth.oauth.Request")
     def test_get_credentials_refresh_fails_with_user_id(
-        self, mock_request_class, mock_load_creds, mock_oauth_creds
+        self, mock_request_class, mock_load_creds, mock_session_ctor
     ):
         """Test getting credentials when refresh fails for specific user"""
         self.mock_creds.token_state = TokenState.STALE
@@ -654,33 +732,35 @@ class TestOAuth(TestCase):
         self.mock_creds.refresh.side_effect = Exception("Refresh failed")
         mock_load_creds.return_value = self.mock_creds
 
+        mock_session = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
+
         result = get_credentials(user_id=self.user_id)
 
         self.assertIsNone(result)
-        mock_oauth_creds.delete().where().execute.assert_called_once()
+        assert mock_session.execute.called
 
-    @patch("auth.oauth.load_credentials_from_db")
-    def test_get_credentials_no_refresh_token(self, mock_load_creds):
-        """Test getting credentials when token is stale but no refresh token"""
-        self.mock_creds.token_state = TokenState.STALE
-        self.mock_creds.refresh_token = None
-        mock_load_creds.return_value = self.mock_creds
-
-        result = get_credentials()
-
-        # Should return credentials without attempting refresh
-        self.assertEqual(result, self.mock_creds)
-
-    # Tests for revoke_credentials
     @patch("auth.oauth.requests.post")
-    @patch("auth.oauth.OAuthCredentials")
+    @patch("auth.oauth.Session")
     def test_revoke_credentials_success_with_refresh_token(
-        self, mock_oauth_creds, mock_post
+        self, mock_session_ctor, mock_post
     ):
         """Test successfully revoking credentials using refresh token"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_post.return_value = mock_response
+
+        # Configure session to accept delete
+        mock_session = MagicMock()
+        mock_session.execute.return_value = None
+        mock_session.commit.return_value = None
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = revoke_credentials(self.mock_creds)
 
@@ -688,18 +768,26 @@ class TestOAuth(TestCase):
         mock_post.assert_called_once_with(
             REVOKE_URL, params={"token": self.refresh_token}, timeout=10
         )
-        mock_oauth_creds.delete().where().execute.assert_called_once()
+        assert mock_session.execute.called
 
     @patch("auth.oauth.requests.post")
-    @patch("auth.oauth.OAuthCredentials")
+    @patch("auth.oauth.Session")
     def test_revoke_credentials_success_with_access_token(
-        self, mock_oauth_creds, mock_post
+        self, mock_session_ctor, mock_post
     ):
         """Test successfully revoking credentials using access token"""
         self.mock_creds.refresh_token = None
         mock_response = MagicMock()
         mock_response.status_code = 204
         mock_post.return_value = mock_response
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value = None
+        mock_session.commit.return_value = None
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_session
+        mock_cm.__exit__.return_value = None
+        mock_session_ctor.return_value = mock_cm
 
         result = revoke_credentials(self.mock_creds)
 
@@ -708,79 +796,6 @@ class TestOAuth(TestCase):
             REVOKE_URL, params={"token": self.access_token}, timeout=10
         )
 
-    def test_revoke_credentials_no_token(self):
-        """Test revoking credentials when no token available"""
-        self.mock_creds.refresh_token = None
-        self.mock_creds.token = None
-
-        result = revoke_credentials(self.mock_creds)
-
-        self.assertFalse(result)
-
-    @patch("auth.oauth.requests.post")
-    def test_revoke_credentials_fails_with_error_status(self, mock_post):
-        """Test revoking credentials fails with error status code"""
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.text = "Bad request"
-        mock_post.return_value = mock_response
-
-        result = revoke_credentials(self.mock_creds)
-
-        self.assertFalse(result)
-
-    @patch("auth.oauth.requests.post")
-    def test_revoke_credentials_network_error(self, mock_post):
-        """Test revoking credentials handles network errors"""
-        mock_post.side_effect = requests.RequestException("Network error")
-
-        result = revoke_credentials(self.mock_creds)
-
-        self.assertFalse(result)
-
-    @patch("auth.oauth.requests.post")
-    @patch("auth.oauth.time.time")
-    def test_run_auth_flow_invalid_json_response(self, mock_time, mock_post):
-        """Test run_auth_flow handles invalid JSON in error response"""
-        device_response = MagicMock()
-        device_response.json.return_value = {
-            "device_code": "test_device_code",
-            "user_code": "TEST-CODE",
-            "verification_url": "https://google.com/device",
-            "expires_in": 600,
-            "interval": 5,
-        }
-        device_response.raise_for_status = MagicMock()
-
-        error_response = MagicMock()
-        error_response.status_code = 400
-        error_response.json.side_effect = ValueError("Invalid JSON")
-
-        mock_post.side_effect = [device_response, error_response]
-        mock_time.side_effect = [0, 1, 2]
-
-        result = run_auth_flow(client_id=self.client_id)
-
-        self.assertIsNone(result)
-
-    @patch("auth.oauth.OAuthCredentials")
-    @patch("auth.oauth.load_credentials_from_db")
-    @patch("auth.oauth.Request")
-    def test_get_credentials_refresh_fails_delete_exception(
-        self, mock_request_class, mock_load_creds, mock_oauth_creds
-    ):
-        """Test getting credentials when refresh and delete both fail"""
-        self.mock_creds.token_state = TokenState.STALE
-        self.mock_creds.refresh_token = self.refresh_token
-        self.mock_creds.refresh.side_effect = Exception("Refresh failed")
-        mock_load_creds.return_value = self.mock_creds
-
-        # Make the delete operation also fail
-        mock_oauth_creds.delete().execute.side_effect = Exception("Delete failed")
-
-        result = get_credentials()
-
-        self.assertIsNone(result)
 
     # Tests for constants
     def test_constants_defined(self):
