@@ -11,8 +11,11 @@ from google.auth.credentials import TokenState
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build, Resource
+from sqlalchemy import select, delete
+from sqlalchemy.orm import Session
 
-from models.models import OAuthCredentials
+from db import engine
+from models import OauthCredential
 from util.logging import logger
 
 
@@ -82,9 +85,11 @@ def run_auth_flow(
 
     if client_id is None:
         # Try environment-style client from first DB row or raise
-        row = OAuthCredentials.select().first()
-        if row and row.client_id:
-            client_id = row.client_id
+        stmt = select(OauthCredential).limit(1)
+        with Session(engine) as s:
+            credential: OauthCredential = s.execute(stmt).scalar_one_or_none()
+
+        client_id = credential.client_id
 
     if client_id is None:
         raise ValueError(
@@ -190,60 +195,49 @@ def save_credentials_to_db(
     except Exception:
         scopes = None
 
-    row, created = OAuthCredentials.get_or_create(
+    cred = OauthCredential(
         user_id=user_id,
-        defaults={
-            "client_id": client_id or getattr(creds, "client_id", None),
-            "client_secret": client_secret or getattr(creds, "client_secret", None),
-            "user_email": user_email,
-            "access_token": creds.token,
-            "refresh_token": getattr(creds, "refresh_token", None),
-            "token_uri": getattr(creds, "token_uri", TOKEN_URL),
-            "scopes": scopes,
-            "token_type": None,
-            "expiry": creds.expiry.astimezone(timezone.utc).replace(tzinfo=None),
-            "extra": json.dumps({}),
-        },
+        client_id=client_id or getattr(creds, "client_id", None),
+        client_secret=client_secret or getattr(creds, "client_secret", None),
+        user_email=user_email,
+        access_token=creds.token,
+        refresh_token=getattr(creds, "refresh_token", None),
+        token_uri=getattr(creds, "token_uri", TOKEN_URL),
+        scopes=scopes,
+        token_type=None,
+        expiry=creds.expiry.astimezone(timezone.utc).replace(tzinfo=None),
+        extra=json.dumps({}),
     )
 
-    if not created:
-        # update existing
-        row.client_id = client_id or getattr(creds, "client_id", row.client_id)
-        row.client_secret = client_secret or getattr(
-            creds, "client_secret", row.client_secret
-        )
-        row.user_email = user_email or row.user_email
-        row.access_token = creds.token
-        row.refresh_token = getattr(creds, "refresh_token", row.refresh_token)
-        row.token_uri = getattr(creds, "token_uri", row.token_uri)
-        row.scopes = scopes or row.scopes
-        row.expiry = creds.expiry.astimezone(timezone.utc).replace(tzinfo=None)
-        row.extra = json.dumps({})
-        row.save()
+    with Session(engine) as s:
+        s.add(cred)
+        s.commit()
+        s.refresh(cred)
 
-    return row.id
+    return cred.id
 
 
 def load_credentials_from_db(user_id: Optional[str] = None) -> Optional[Credentials]:
     try:
         if user_id:
-            row = OAuthCredentials.get_or_none(OAuthCredentials.user_id == user_id)
+            stmt = select(OauthCredential).where(OauthCredential.user_id == user_id)
         else:
-            row = OAuthCredentials.select().first()
-        if not row:
+            stmt = select(OauthCredential).limit(1)
+        with Session(engine) as s:
+            cred = s.execute(stmt).scalar_one_or_none()
+        if not cred:
             return None
 
-        creds = Credentials(
-            token=row.access_token,
-            refresh_token=row.refresh_token,
-            token_uri=row.token_uri,
-            client_id=row.client_id,
-            client_secret=row.client_secret,
-            scopes=(row.scopes or "").split(),
+        oauth_cred = Credentials(
+            token=cred.access_token,
+            refresh_token=cred.refresh_token,
+            token_uri=cred.token_uri,
+            client_id=cred.client_id,
+            client_secret=cred.client_secret,
+            scopes=(cred.scopes or "").split(),
         )
-
-        creds.expiry = row.expiry.astimezone(timezone.utc).replace(tzinfo=None)
-        return creds
+        oauth_cred.expiry = cred.expiry.astimezone(timezone.utc).replace(tzinfo=None)
+        return oauth_cred
     except Exception as exc:
         logger.error("Error loading credentials from DB: %s", exc)
         return None
@@ -274,13 +268,16 @@ def get_credentials(user_id: Optional[str] = None) -> Optional[Credentials]:
             # likely invalid_grant or revoked token
             logger.error("Failed to refresh credentials: %s", exc)
             try:
-                # delete the row
-                if user_id:
-                    OAuthCredentials.delete().where(
-                        OAuthCredentials.user_id == user_id
-                    ).execute()
-                else:
-                    OAuthCredentials.delete().execute()
+                with Session(engine) as s:
+                    # delete the row
+                    if user_id:
+                        stmt = delete(OauthCredential).where(
+                            OauthCredential.user_id == user_id
+                        )
+                    else:
+                        stmt = delete(OauthCredential)
+                    s.execute(stmt)
+                    s.commit()
             except Exception:
                 pass
             return None
@@ -296,9 +293,12 @@ def revoke_credentials(creds: Credentials) -> bool:
         resp = requests.post(REVOKE_URL, params={"token": token}, timeout=10)
         if resp.status_code in (200, 204):
             # remove from DB
-            OAuthCredentials.delete().where(
-                OAuthCredentials.client_id == creds.client_id
-            ).execute()
+            stmt = delete(OauthCredential).where(
+                OauthCredential.client_id == creds.client_id
+            )
+            with Session(engine) as s:
+                s.execute(stmt)
+                s.commit()
             return True
         logger.error("Failed to revoke token: %s %s", resp.status_code, resp.text)
         return False

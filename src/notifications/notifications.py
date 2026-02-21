@@ -1,28 +1,20 @@
 from apprise import apprise
 
+from models import YoutubeVideo
 from notifications import apprise_urls
 from util.logging import logger
 
 
-def send_youtube_channels_notifications(channels: list[dict], video: dict = None):
-    apobj = apprise.Apprise()
+def send_upload_notification(videos: list[YoutubeVideo]):
+    appobj = apprise.Apprise()
 
     for apprise_url in apprise_urls:
-        apobj.add(apprise_url)
+        appobj.add(apprise_url)
 
-    if len(channels) > 1:
-        title = f"{','.join([channel['snippet']['title'] for channel in channels])} have uploaded new videos to YouTube!"
-        body = "Check them out here: https://www.youtube.com/feed/subscriptions"
-    elif video:
-        video_title = video["snippet"]["title"]
-        video_url = f"https://www.youtube.com/watch?v={video['snippet']['resourceId']['videoId']}"
-        title = (
-            f"{channels[0]['snippet']['title']} has uploaded a new video to YouTube!"
+    for video in videos:
+        title = f"{video.youtube_channel.name} has uploaded a new video to YouTube!"
+        body = f"{video.title}\n{video.url}\nUploaded at: {video.uploaded_at}"
+        logger.info(
+            f"Sending notification for video {video.id} from channel {video.youtube_channel_id}"
         )
-        body = f"{video_title}\n{video_url}"
-    else:
-        logger.warning("No video found")
-        return
-
-    logger.info(f"Sending notifications for {channels} channels")
-    apobj.notify(title=title, body=body)
+        appobj.notify(title=title, body=body, attach=video.thumbnail_url)

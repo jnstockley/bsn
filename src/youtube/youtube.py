@@ -1,161 +1,163 @@
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 from googleapiclient.discovery import Resource
 
-from googleapiclient.errors import HttpError
+from sqlalchemy import select, delete
+from sqlalchemy.orm import Session
 
-from models.models import YouTubeChannel, OAuthCredentials
-from notifications.notifications import send_youtube_channels_notifications
+from db import engine
+from models import YoutubeChannel, OauthCredential, YoutubeVideo
 from util.logging import logger
 
 
-def pull_youtube_subscriptions(youtube: Resource):
+def pull_my_subscriptions(youtube: Resource):
     request = youtube.subscriptions().list(
         part="snippet,contentDetails",
         mine=True,
         maxResults=50,
     )
-    response = request.execute()
 
-    channels = response["items"]
+    response = __make_request(request)
+
+    channels, recently_uploaded_channels = __youtube_subs_response_to_channels(response)
+
+    return channels, recently_uploaded_channels
+
+
+def get_recent_videos(
+    channels: list[YoutubeChannel], youtube: Resource
+) -> list[YoutubeVideo]:
+    playlist_ids = [f"UU{channel.id[2:]}" for channel in channels]
+
+    videos = []
+
+    for playlist_id in playlist_ids:
+        channel_id = f"UC{playlist_id[2:]}"
+        request = youtube.playlistItems().list(
+            part="snippet,status,contentDetails",
+            playlistId=playlist_id,
+            maxResults=1,
+        )
+
+        logger.debug(f"Making request {request.uri}")
+
+        response = request.execute()
+
+        body = response["items"][0]
+
+        if body["status"]["privacyStatus"] != "public":
+            logger.info(
+                f"Skipping video {body['snippet']['title']} from channel {channel_id} because it is not public"
+            )
+            continue
+
+        # Parse ISO 8601 UTC timestamp and convert to local timezone
+        utc_time = datetime.strptime(
+            body["contentDetails"]["videoPublishedAt"], "%Y-%m-%dT%H:%M:%SZ"
+        )
+        utc_time = utc_time.replace(tzinfo=timezone.utc)
+        local_time = utc_time.astimezone()
+
+        video = YoutubeVideo(
+            id=body["contentDetails"]["videoId"],
+            title=body["snippet"]["title"],
+            url=f"https://www.youtube.com/watch?v={body['contentDetails']['videoId']}",
+            thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
+            is_short=False,
+            is_livestream=False,
+            uploaded_at=local_time,
+            youtube_channel_id=channel_id,
+        )
+
+        logger.info(f"Found new video: {video}")
+
+        stmt = delete(YoutubeVideo).where(YoutubeVideo.youtube_channel_id == channel_id)
+
+        with Session(engine) as s:
+            s.execute(stmt)
+            s.add(video)
+            s.commit()
+            s.refresh(video)
+            # Eager load the youtube_channel relationship to prevent DetachedInstanceError
+            _ = video.youtube_channel
+            s.expunge(video)
+
+        videos.append(video)
+
+    return videos
+
+
+def __youtube_subs_response_to_channels(
+    response: dict,
+) -> tuple[list[YoutubeChannel], list[YoutubeChannel]]:
+    all_channels: list[YoutubeChannel] = []
+    recently_uploaded_channels: list[YoutubeChannel] = []
+
+    for c in response:
+        with Session(engine) as s:
+            channel_id = c["snippet"]["resourceId"]["channelId"]
+
+            stmt = select(YoutubeChannel).where(YoutubeChannel.id == channel_id)
+
+            channel: YoutubeChannel = s.execute(stmt).scalar_one_or_none()
+
+            if not channel:  # New channel, add to db
+                channel = YoutubeChannel(
+                    id=channel_id,
+                    name=c["snippet"]["title"],
+                    num_videos=int(c["contentDetails"]["totalItemCount"]),
+                )
+                s.add(channel)
+                s.commit()
+                s.refresh(channel)
+            else:
+                current_num_videos = int(c["contentDetails"]["totalItemCount"])
+
+                if current_num_videos == channel.num_videos + 1:
+                    logger.info(f"Channel {channel.name} has new video(s)")
+                    recently_uploaded_channels.append(channel)
+                elif current_num_videos > channel.num_videos + 1:
+                    logger.warning(
+                        f"More than 1 video uploaded since last check, skipping notification for channel {channel.name}"
+                    )
+
+                channel.num_videos = current_num_videos
+                channel.name = c["snippet"]["title"]
+                s.flush()
+                s.commit()
+                s.refresh(channel)
+
+            all_channels.append(channel)
+
+    return all_channels, recently_uploaded_channels
+
+
+def __make_request(request) -> dict:
+    logger.debug(f"Making request {request.uri}")
+
+    root_uri = request.uri
+
+    response = request.execute()
+    response_body = response["items"]
 
     while response["nextPageToken"] if "nextPageToken" in response else None:
-        request = youtube.subscriptions().list(
-            part="snippet,contentDetails",
-            mine=True,
-            maxResults=50,
-            pageToken=response["nextPageToken"],
-        )
+        next_page_token = response["nextPageToken"]
+
+        request.uri = root_uri + f"&pageToken={next_page_token}"
+
+        logger.debug(f"Making request {request.uri}")
         response = request.execute()
-        channels.extend(response["items"])
+        response_body.extend(response["items"])
 
-    assert len(channels) == response["pageInfo"]["totalResults"]
-
-    for channel in channels:
-        channel_id = channel["snippet"]["resourceId"]["channelId"]
-        if not YouTubeChannel.select().where(YouTubeChannel.id == channel_id).exists():
-            logger.info(
-                f"Importing channel {channel_id} with {channel['contentDetails']['totalItemCount']} videos"
-            )
-            YouTubeChannel.create(
-                id=channel_id,
-                num_videos=int(channel["contentDetails"]["totalItemCount"]),
-            )
-
-    # delete channels that are no longer subscribed
-    existing_channel_ids = [
-        channel["snippet"]["resourceId"]["channelId"] for channel in channels
-    ]
-    for channel in YouTubeChannel.select():
-        if channel.id not in existing_channel_ids:
-            logger.info(f"Deleting channel {channel.id} as it is no longer subscribed")
-            YouTubeChannel.delete_by_id(channel.id)
-
-
-def get_channels_by_id(youtube: Resource, channel_ids: list[str]) -> list[dict] | None:
-    channels: list[dict] = []
-
-    for channel_str in _chunk_list(channel_ids):
-        request = youtube.channels().list(part="statistics,snippet", id=channel_str)
-
-        try:
-            logger.info(f"Making request {request.uri}")
-            response = request.execute()
-            if "items" not in response:
-                logger.warning(f"No items found with channel_ids: {channel_str}")
-                return None
-            channels.extend(response["items"])
-        except HttpError as e:
-            logger.error(
-                f"An HTTP error {e.resp.status} occurred: {e.content.decode()} with channel_ids: {channel_str}"
-            )
-            return None
-
-    return channels
-
-
-def get_channels_with_new_videos(
-    previous_channels: list[YouTubeChannel], current_channels: list[dict]
-) -> list[dict]:
-    new_video_channels = []
-
-    for channel in current_channels:
-        previous_channel = next(
-            (c for c in previous_channels if c.id == channel["id"]), None
-        )
-        if int(channel["statistics"]["videoCount"]) > previous_channel.num_videos:
-            logger.info(f"Channel {channel['id']} has new videos")
-            new_video_channels.append(channel)
-        elif int(channel["statistics"]["videoCount"]) < previous_channel.num_videos:
-            logger.info(f"Video removed for channel {channel['id']}, updating channel")
-            YouTubeChannel.update(
-                num_videos=int(channel["statistics"]["videoCount"])
-            ).where(YouTubeChannel.id == channel["id"]).execute()
-
-    return new_video_channels
-
-
-def update_channels(channels: list[dict]):
-    for channel in channels:
-        logger.info(
-            f"Updating channel {channel['id']} with {channel['statistics']['videoCount']} videos"
-        )
-        YouTubeChannel.update(
-            num_videos=int(channel["statistics"]["videoCount"])
-        ).where(YouTubeChannel.id == channel["id"]).execute()
-
-
-def check_for_new_videos(youtube: Resource):
-    channels = YouTubeChannel.select()
-    current_channels = get_channels_by_id(youtube, [channel.id for channel in channels])
-    new_video_channels = get_channels_with_new_videos(channels, current_channels)
-    update_channels(new_video_channels)
-
-    video = None
-    if len(new_video_channels) > 0:
-        if len(new_video_channels) == 1:
-            video = get_most_recent_video(youtube, new_video_channels[0]["id"])
-
-        send_youtube_channels_notifications(new_video_channels, video)
-
-
-def get_most_recent_video(youtube: Resource, channel_id: str) -> dict | None:
-    playlist_id = f"UU{channel_id[2:]}"
-
-    request = youtube.playlistItems().list(
-        part="snippet,status", maxResults=1, playlistId=playlist_id
-    )
-
-    try:
-        logger.info(f"Making request {request.uri}")
-        response = request.execute()
-        if "items" not in response:
-            logger.warning(f"No items found with channel_id: {channel_id}")
-            return None
-
-        video = response["items"][0]
-        published_at = datetime.strptime(
-            video["snippet"]["publishedAt"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-
-        if (
-            video["status"]["privacyStatus"] == "public"
-            and video["snippet"]["position"] == 0
-            and published_at >= (datetime.now() - timedelta(minutes=2))
-        ):
-            return video
-
-    except HttpError as e:
-        logger.error(
-            f"An HTTP error {e.resp.status} occurred: {e.content} with channel_id: {channel_id}"
-        )
-        return None
+    return response_body
 
 
 def calculate_interval_between_cycles():
-    num_channels: int = len(YouTubeChannel.select())
-    num_api_keys: int = len(OAuthCredentials.select())
+    with Session(engine) as s:
+        num_channels: int = len(s.execute(select(YoutubeChannel)).scalars().all())
+        num_api_keys: int = len(s.execute(select(OauthCredential)).scalars().all())
+
     max_requests_per_key_per_day = 10000
     total_requests_allowed_per_day = num_api_keys * max_requests_per_key_per_day
     requests_per_cycle = math.ceil((num_channels + 1) / 50)

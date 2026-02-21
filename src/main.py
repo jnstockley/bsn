@@ -3,39 +3,31 @@ import sys
 from dotenv import load_dotenv
 
 from auth import oauth
+from notifications.notifications import send_upload_notification
 from util.healthcheck import healthcheck
 import time
 
-from models import database
-from models.models import YouTubeChannel, OAuthCredentials
 from util.logging import logger
 from youtube.youtube import (
-    check_for_new_videos,
     calculate_interval_between_cycles,
-    pull_youtube_subscriptions,
+    pull_my_subscriptions,
+    get_recent_videos,
 )
 
 
 def main():
     logger.info("Staring BSN...")
-    if not database.table_exists("youtubechannel"):
-        logger.info("YouTube Channels table does not exist. Creating table...")
-        database.create_tables([YouTubeChannel])
-        database.commit()
-    if not database.table_exists("oauth_credentials"):
-        logger.info("OAuth Credentials table does not exist. Creating table...")
-        database.create_tables([OAuthCredentials])
-        database.commit()
-        oauth.get_authenticated_youtube_service(force_auth=True)
 
     interval_between_checks: int = calculate_interval_between_cycles()
 
     while True:
         youtube = oauth.get_authenticated_youtube_service(force_auth=True)
         if youtube:
-            pull_youtube_subscriptions(youtube)
-            # TODO More work could be done to reduce API calls, by using `subscription` to check video counts
-            check_for_new_videos(youtube)
+            _, recently_uploaded_channels = pull_my_subscriptions(youtube)
+            if recently_uploaded_channels:
+                videos = get_recent_videos(recently_uploaded_channels, youtube)
+                send_upload_notification(videos)
+
             logger.info(f"Sleeping for {interval_between_checks} seconds...")
             time.sleep(interval_between_checks)
         else:
