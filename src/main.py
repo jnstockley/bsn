@@ -2,12 +2,13 @@ import sys
 
 from dotenv import load_dotenv
 
-from auth import oauth
+from auth import oauth as oauth
 from notifications.notifications import send_upload_notification
 from util.healthcheck import healthcheck
 import time
 
 from util.logging import logger
+from youtube.quota import initialize_policy
 from youtube.youtube import (
     calculate_interval_between_cycles,
     pull_my_subscriptions,
@@ -18,10 +19,13 @@ from youtube.youtube import (
 def main():
     logger.info("Staring BSN...")
 
+    oauth.get_authenticated_youtube_service()
+
     interval_between_checks: int = calculate_interval_between_cycles()
+    initialize_policy()
 
     while True:
-        youtube = oauth.get_authenticated_youtube_service(force_auth=True)
+        youtube = oauth.get_authenticated_youtube_service()
         if youtube:
             _, recently_uploaded_channels = pull_my_subscriptions(youtube)
             if recently_uploaded_channels:

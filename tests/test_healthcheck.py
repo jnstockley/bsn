@@ -71,7 +71,7 @@ class TestHealthcheck(TestCase):
         mock_logger.error.assert_called()
 
     @patch("util.healthcheck.oauth")
-    def test_healthcheck_calls_oauth_with_force_auth(self, mock_oauth):
+    def test_healthcheck_calls_oauth_get_authenticated_service(self, mock_oauth):
         mock_youtube = MagicMock()
         mock_request = MagicMock()
         mock_request.execute.return_value = {"items": [{"id": self.example_channel_id}], "pageInfo": {"totalResults": 1}}
@@ -81,4 +81,4 @@ class TestHealthcheck(TestCase):
         with self.assertRaises(SystemExit):
             healthcheck()
 
-        mock_oauth.get_authenticated_youtube_service.assert_called_once_with(force_auth=True)
+        mock_oauth.get_authenticated_youtube_service.assert_called_once_with()
