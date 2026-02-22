@@ -145,7 +145,9 @@ def __youtube_subs_response_to_channels(
 
     current_channel_ids = {c["snippet"]["resourceId"]["channelId"] for c in response}
     with Session(engine) as s:
-        stmt = delete(YoutubeChannel).where(YoutubeChannel.id.not_in(current_channel_ids))
+        stmt = delete(YoutubeChannel).where(
+            YoutubeChannel.id.not_in(current_channel_ids)
+        )
         s.execute(stmt)
         s.commit()
 
