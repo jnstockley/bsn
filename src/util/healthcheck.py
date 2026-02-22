@@ -1,10 +1,13 @@
 from auth import oauth as oauth
 from util.logging import logger
+from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import __increment_quota_usage
 
 
 def healthcheck() -> bool:
     example_channel_id = "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+    initialize_policy()
+    initialize_usage()
     try:
         youtube = oauth.get_authenticated_youtube_service()
         if not youtube:
