@@ -1,4 +1,6 @@
-import sys
+import tomllib
+import argparse
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -40,11 +42,42 @@ def main():
             exit(1)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="BSN - Social Media Upload Notifier")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="run",
+        choices=["healthcheck", "version", "help"],
+        help="Optional command to run (e.g., healthcheck)",
+    )
+    return parser.parse_args()
+
+
+def get_version():
+    try:
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        return data["project"]["version"]
+    except (FileNotFoundError, KeyError):
+        return "unknown"
+
+
 if __name__ == "__main__":
     try:
         load_dotenv()
-        if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
+        args = parse_args()
+        if args.command == "healthcheck":
             healthcheck()
+        elif args.command == "version":
+            print(f"BSN Version {get_version()}")
+        elif args.command == "help":
+            print("Usage: python main.py [command]")
+            print("Commands:")
+            print("  healthcheck - Run a health check on the application")
+            print("  version     - Display the current version of BSN")
+            print("  help        - Show this help message")
         else:
             main()
     except KeyboardInterrupt:
