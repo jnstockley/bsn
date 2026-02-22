@@ -41,8 +41,12 @@ def main():
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
-        healthcheck()
-    else:
-        main()
+    try:
+        load_dotenv()
+        if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
+            healthcheck()
+        else:
+            main()
+    except KeyboardInterrupt:
+        logger.info("Shutting down BSN...")
+        exit(0)
