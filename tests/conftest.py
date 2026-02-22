@@ -5,6 +5,10 @@ Pytest configuration file for test setup and fixtures.
 import os
 import sys
 from pathlib import Path
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
 
 # Set required environment variables before importing any modules
 os.environ["APPRISE_URLS"] = "test://localhost"
@@ -15,10 +19,6 @@ os.environ["DATA_DIR"] = ":memory:"
 # Ensure the src directory is in the Python path
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
-
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -60,4 +60,3 @@ def in_memory_db():
 
     for p in patchers:
         p.stop()
-

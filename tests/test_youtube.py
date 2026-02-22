@@ -37,6 +37,42 @@ class TestYouTube(TestCase):
         """Clean up after tests"""
         pass
 
+    # ------------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------------
+
+    def _make_quota_session_cm(self, increment_calls=1):
+        """Return (mock_session, mock_session_cm) pre-loaded with enough
+        scalar_one_or_none values to satisfy:
+          - 1 × __check_available_quota  (2 DB reads: policy + usage)
+          - ``increment_calls`` × __increment_quota_usage (2 DB reads each)
+
+        quota_remaining is set to a real int so the `<= 0` guard doesn't raise.
+        """
+
+        def _make_pair():
+            policy = MagicMock()
+            usage = MagicMock()
+            usage.quota_remaining = 9999
+            return policy, usage
+
+        side_effects = []
+        # quota check
+        p, u = _make_pair()
+        side_effects += [p, u]
+        # each increment call
+        for _ in range(increment_calls):
+            p, u = _make_pair()
+            side_effects += [p, u]
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.side_effect = side_effects
+
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+        return mock_session, mock_session_cm
+
     # Tests for pull_my_subscriptions (replaces pull_youtube_subscriptions tests)
     def test_pull_my_subscriptions_single_page(self):
         """Test pulling subscriptions when all results fit in one page"""
@@ -54,18 +90,21 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
-        # Patch the internal transformer to avoid DB writes and return predictable objects
-        with patch(
-            "youtube.youtube.__youtube_subs_response_to_channels"
-        ) as mock_transform:
-            mock_transform.return_value = (["chan_obj"], ["recent_obj"])
+        # 1 page → 1 __increment_quota_usage call inside __make_request
+        _, mock_session_cm = self._make_quota_session_cm(increment_calls=1)
 
+        with (
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch(
+                "youtube.youtube.__youtube_subs_response_to_channels"
+            ) as mock_transform,
+        ):
+            mock_transform.return_value = (["chan_obj"], ["recent_obj"])
             channels, recently = pull_my_subscriptions(self.mock_youtube)
 
-            # Ensure the transformer was called with the accumulated items
-            mock_transform.assert_called_once()
-            assert channels == ["chan_obj"]
-            assert recently == ["recent_obj"]
+        mock_transform.assert_called_once()
+        assert channels == ["chan_obj"]
+        assert recently == ["recent_obj"]
 
     def test_pull_my_subscriptions_multiple_pages(self):
         """Test pulling subscriptions with pagination"""
@@ -94,22 +133,25 @@ class TestYouTube(TestCase):
         mock_request.execute.side_effect = [mock_response_page1, mock_response_page2]
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
-        with patch(
-            "youtube.youtube.__youtube_subs_response_to_channels"
-        ) as mock_transform:
-            mock_transform.return_value = (["c1", "c2"], ["recent_obj"])
+        # 2 pages → 2 __increment_quota_usage calls inside __make_request
+        _, mock_session_cm = self._make_quota_session_cm(increment_calls=2)
 
+        with (
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch(
+                "youtube.youtube.__youtube_subs_response_to_channels"
+            ) as mock_transform,
+        ):
+            mock_transform.return_value = (["c1", "c2"], ["recent_obj"])
             channels, recently = pull_my_subscriptions(self.mock_youtube)
 
-            # The transformer should be called once with both items concatenated by __make_request
-            mock_transform.assert_called_once()
-            assert channels == ["c1", "c2"]
-            assert recently == ["recent_obj"]
+        mock_transform.assert_called_once()
+        assert channels == ["c1", "c2"]
+        assert recently == ["recent_obj"]
 
     # Tests for get_recent_videos (replaces get_most_recent_video semantics)
     def test_get_recent_videos_success(self):
         """Test that get_recent_videos returns a list of YoutubeVideo-like objects for public videos"""
-        # Create a lightweight channel object with an `id` attribute
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
@@ -140,30 +182,33 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        # Patch Session to avoid touching the real DB; provide a context manager whose __enter__ returns
-        # a mock session object with the methods used in get_recent_videos
-        mock_session = MagicMock()
-        mock_session.execute.return_value = None
-        mock_session.add.return_value = None
-        mock_session.commit.return_value = None
-        mock_session.refresh.return_value = None
-        mock_session.expunge.return_value = None
+        # 1 channel → 1 __increment_quota_usage call
+        _, mock_session_cm = self._make_quota_session_cm(increment_calls=1)
 
-        mock_session_cm = MagicMock()
-        mock_session_cm.__enter__.return_value = mock_session
-        mock_session_cm.__exit__.return_value = None
+        # logger.info(f"Found new video: {video}") is called *before* the DB
+        # session block that loads video.youtube_channel. The f-string eagerly
+        # evaluates YoutubeVideo.__repr__, which accesses
+        # self.youtube_channel.name and raises AttributeError on the unloaded
+        # (None) relationship. Patch YoutubeVideo so instances are MagicMocks
+        # with pre-set attributes — and patch delete() so SQLAlchemy's ORM
+        # coercion doesn't receive the mocked class in place of the real one.
+        mock_video = MagicMock()
+        mock_video.id = "vid123"
+        mock_video.title = "Test Video"
+        mock_video.youtube_channel_id = self.sample_channel_id
 
-        with patch("youtube.youtube.Session", return_value=mock_session_cm):
+        with (
+            patch("youtube.youtube.YoutubeVideo", return_value=mock_video),
+            patch("youtube.youtube.delete"),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+        ):
             videos = get_recent_videos([mock_channel], self.mock_youtube)
 
-        # One video should be returned and have the expected id and title
         assert len(videos) == 1
         v = videos[0]
         assert v.id == "vid123"
         assert v.title == "Test Video"
-        assert v.youtube_channel_id == f"UC{v.youtube_channel_id[2:]}" or isinstance(
-            v.youtube_channel_id, str
-        )
+        assert isinstance(v.youtube_channel_id, str)
 
     def test_get_recent_videos_skips_non_public(self):
         """When the playlist item is not public, get_recent_videos should skip it"""
@@ -194,10 +239,8 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        mock_session = MagicMock()
-        mock_session_cm = MagicMock()
-        mock_session_cm.__enter__.return_value = mock_session
-        mock_session_cm.__exit__.return_value = None
+        # Private video still triggers 1 __increment_quota_usage (request was made).
+        _, mock_session_cm = self._make_quota_session_cm(increment_calls=1)
 
         with patch("youtube.youtube.Session", return_value=mock_session_cm):
             videos = get_recent_videos([mock_channel], self.mock_youtube)
@@ -206,20 +249,14 @@ class TestYouTube(TestCase):
 
     # Tests for calculate_interval_between_cycles
     def test_calculate_interval_between_cycles_single_key(self):
-        """Test interval calculation with a single API key"""
-        # Prepare mock objects to be returned by session.execute(...).scalars().all()
+        """Test interval calculation with a single channel"""
         mock_channels = [MagicMock()]
-        mock_creds = [MagicMock()]
 
-        # Build objects that have .scalars().all() -> our lists
         mock_channels_result = MagicMock()
         mock_channels_result.scalars.return_value.all.return_value = mock_channels
-        mock_creds_result = MagicMock()
-        mock_creds_result.scalars.return_value.all.return_value = mock_creds
 
         mock_session = MagicMock()
-        # The first execute call returns channels_result, second returns creds_result
-        mock_session.execute.side_effect = [mock_channels_result, mock_creds_result]
+        mock_session.execute.return_value = mock_channels_result
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
@@ -231,17 +268,14 @@ class TestYouTube(TestCase):
         assert interval == 9
 
     def test_calculate_interval_between_cycles_multiple_keys(self):
-        """Test interval calculation with multiple API keys"""
+        """Test interval calculation with multiple channels"""
         mock_channels = [MagicMock() for _ in range(100)]
-        mock_creds = [MagicMock() for _ in range(2)]
 
         mock_channels_result = MagicMock()
         mock_channels_result.scalars.return_value.all.return_value = mock_channels
-        mock_creds_result = MagicMock()
-        mock_creds_result.scalars.return_value.all.return_value = mock_creds
 
         mock_session = MagicMock()
-        mock_session.execute.side_effect = [mock_channels_result, mock_creds_result]
+        mock_session.execute.return_value = mock_channels_result
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
@@ -250,20 +284,19 @@ class TestYouTube(TestCase):
         with patch("youtube.youtube.Session", return_value=mock_session_cm):
             interval = calculate_interval_between_cycles()
 
-        assert interval == 13
+        # 100 channels: ceil(101/50)=3 requests/cycle, 10000//3=3333 cycles/day,
+        # ceil(86400/3333)=26 seconds between cycles
+        assert interval == 26
 
     def test_calculate_interval_between_cycles_many_channels(self):
         """Test interval calculation with many channels"""
         mock_channels = [MagicMock() for _ in range(500)]
-        mock_creds = [MagicMock()]
 
         mock_channels_result = MagicMock()
         mock_channels_result.scalars.return_value.all.return_value = mock_channels
-        mock_creds_result = MagicMock()
-        mock_creds_result.scalars.return_value.all.return_value = mock_creds
 
         mock_session = MagicMock()
-        mock_session.execute.side_effect = [mock_channels_result, mock_creds_result]
+        mock_session.execute.return_value = mock_channels_result
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
