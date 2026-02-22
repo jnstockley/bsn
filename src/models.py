@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from sqlalchemy import ForeignKey
@@ -18,7 +19,7 @@ class YoutubeChannel(Base):
     video: Mapped["YoutubeVideo"] = relationship(back_populates="youtube_channel")
 
     def __repr__(self):
-        return f"YoutubeChannel(id={self.id}, name={self.name}, num_videos={self.num_videos})"
+        return f"YoutubeChannel(name={self.name}, num_videos={self.num_videos})"
 
 
 class YoutubeVideo(Base):
@@ -36,7 +37,7 @@ class YoutubeVideo(Base):
     youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="video")
 
     def __repr__(self):
-        return f"YoutubeVideo(id={self.id}, title={self.title}, url={self.url}, uploaded_at={self.uploaded_at})"
+        return f"YoutubeVideo(title={self.title}, url={self.url}, uploaded_at={self.uploaded_at}, uploaded_by={self.youtube_channel.name})"
 
 
 class OauthCredential(Base):
@@ -57,3 +58,53 @@ class OauthCredential(Base):
 
     def __repr__(self):
         return f"OauthCredential(id={self.id}, client_id={self.client_id}, user_email={self.user_email})"
+
+class Service(Enum):
+    YOUTUBE = "youtube"
+
+class QuotaPolicy(Base):
+    """Defines the quota limit/configuration for a service.
+
+    - service: a short name for the service (e.g. 'youtube')
+    - limit: maximum allowed requests in the configured window
+    """
+
+    __tablename__ = "quota_policy"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    service: Mapped[Service] = mapped_column(nullable=False, unique=True)
+    limit: Mapped[int] = mapped_column(nullable=False)
+
+    usages: Mapped[list["QuotaUsage"]] = relationship(back_populates="config", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"QuotaPolicy(id={self.id}, service={self.service}, limit={self.limit})"
+
+
+class QuotaUsage(Base):
+    """Stores snapshots of quota usage tied to the singleton QuotaConfig.
+
+    This model explicitly stores the window boundaries and a reset_at timestamp which should align
+    with the QuotaConfig daily reset (computed in UTC by application logic).
+    """
+
+    __tablename__ = "quota_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    config_id = mapped_column(ForeignKey("quota_policy.id"), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(nullable=False)
+    window_start: Mapped[datetime] = mapped_column(nullable=False)
+    window_end: Mapped[datetime] = mapped_column(nullable=False)
+    usage_count: Mapped[int] = mapped_column(nullable=False)
+    quota_remaining: Mapped[Optional[int]] = mapped_column(nullable=True)
+
+    # reset_at should be the UTC datetime matching the config's next reset for the window
+    reset_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+
+    config: Mapped["QuotaPolicy"] = relationship(back_populates="usages")
+
+    def __repr__(self):
+        return (
+            f"QuotaUsage(id={self.id}, config_id={self.config_id}, timestamp={self.timestamp}, "
+            f"usage_count={self.usage_count}, quota_remaining={self.quota_remaining}, reset_at={self.reset_at})"
+        )

@@ -15,6 +15,6 @@ def send_upload_notification(videos: list[YoutubeVideo]):
         title = f"{video.youtube_channel.name} has uploaded a new video to YouTube!"
         body = f"{video.title}\n{video.url}\nUploaded at: {video.uploaded_at}"
         logger.info(
-            f"Sending notification for video {video.id} from channel {video.youtube_channel_id}"
+            f"Sending notification for video {video.title} from channel {video.youtube_channel.name}"
         )
         appobj.notify(title=title, body=body, attach=video.thumbnail_url)

@@ -7,11 +7,15 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import YoutubeChannel, OauthCredential, YoutubeVideo
+from models import YoutubeChannel, OauthCredential, YoutubeVideo, QuotaPolicy, Service, QuotaUsage
 from util.logging import logger
 
 
 def pull_my_subscriptions(youtube: Resource):
+    if not __check_available_quota():
+        logger.warning("Quota for YouTube API has been exhausted. Skipping subscription check.")
+        return None, None
+
     request = youtube.subscriptions().list(
         part="snippet,contentDetails",
         mine=True,
@@ -28,6 +32,10 @@ def pull_my_subscriptions(youtube: Resource):
 def get_recent_videos(
     channels: list[YoutubeChannel], youtube: Resource
 ) -> list[YoutubeVideo]:
+    if not __check_available_quota():
+        logger.warning("Quota for YouTube API has been exhausted. Skipping recent video check.")
+        return []
+
     playlist_ids = [f"UU{channel.id[2:]}" for channel in channels]
 
     videos = []
@@ -43,6 +51,7 @@ def get_recent_videos(
         logger.debug(f"Making request {request.uri}")
 
         response = request.execute()
+        __increment_quota_usage(1)
 
         body = response["items"][0]
 
@@ -133,12 +142,13 @@ def __youtube_subs_response_to_channels(
     return all_channels, recently_uploaded_channels
 
 
-def __make_request(request) -> dict:
+def __make_request(request, units_used: int = 1) -> dict:
     logger.debug(f"Making request {request.uri}")
 
     root_uri = request.uri
 
     response = request.execute()
+    __increment_quota_usage(units_used)
     response_body = response["items"]
 
     while response["nextPageToken"] if "nextPageToken" in response else None:
@@ -148,18 +158,60 @@ def __make_request(request) -> dict:
 
         logger.debug(f"Making request {request.uri}")
         response = request.execute()
+        __increment_quota_usage(units_used)
         response_body.extend(response["items"])
 
     return response_body
 
 
+def __increment_quota_usage(units_used: int):
+    with Session(engine) as s:
+        stmt = select(QuotaPolicy).where(QuotaPolicy.service == Service.YOUTUBE)
+        policy: QuotaPolicy | None = s.execute(stmt).scalar_one_or_none()
+        if not policy:
+            logger.warning("Quota policy for YouTube not found when incrementing usage. Call initialize_policy() first.")
+            raise RuntimeError("Quota policy for YouTube not found. Call initialize_policy() first.")
+
+        stmt = select(QuotaUsage).where(QuotaUsage.window_start <= datetime.now(), QuotaUsage.window_end >= datetime.now(), QuotaUsage.config_id == policy.id)
+        usage: QuotaUsage | None = s.execute(stmt).scalar_one_or_none()
+        if not usage:
+            logger.warning("Quota usage for YouTube not found when incrementing usage. Call initialize_usage() first.")
+            raise RuntimeError("Quota usage for YouTube not found. Call initialize_usage() first.")
+
+        if usage.quota_remaining < units_used:
+            logger.warning("Attempted to use more quota than remaining for YouTube API. This should have been prevented by __check_available_quota().")
+            raise RuntimeError("Attempted to use more quota than remaining for YouTube API.")
+
+        usage.usage_count += units_used
+        usage.quota_remaining -= units_used
+        s.flush()
+        s.commit()
+        s.refresh(usage)
+
+def __check_available_quota() -> bool:
+    with Session(engine) as s:
+        stmt = select(QuotaPolicy).where(QuotaPolicy.service == Service.YOUTUBE)
+        policy: QuotaPolicy | None = s.execute(stmt).scalar_one_or_none()
+        if not policy:
+            logger.warning("Quota policy for YouTube not found when checking quota. Call initialize_policy() first.")
+            raise RuntimeError("Quota policy for YouTube not found. Call initialize_policy() first.")
+
+        stmt = select(QuotaUsage).where(QuotaUsage.window_start <= datetime.now(), QuotaUsage.window_end >= datetime.now(), QuotaUsage.config_id == policy.id)
+        usage: QuotaUsage | None = s.execute(stmt).scalar_one_or_none()
+        if not usage:
+            logger.warning("Quota usage for YouTube not found when checking quota. Call initialize_usage() first.")
+            raise RuntimeError("Quota usage for YouTube not found. Call initialize_usage() first.")
+
+        if usage.quota_remaining <= 0:
+            logger.warning("Quota for YouTube API has been exhausted for the current window.")
+            return False
+    return True
+
 def calculate_interval_between_cycles():
     with Session(engine) as s:
         num_channels: int = len(s.execute(select(YoutubeChannel)).scalars().all())
-        num_api_keys: int = len(s.execute(select(OauthCredential)).scalars().all())
 
-    max_requests_per_key_per_day = 10000
-    total_requests_allowed_per_day = num_api_keys * max_requests_per_key_per_day
+    total_requests_allowed_per_day = 10_000
     requests_per_cycle = math.ceil((num_channels + 1) / 50)
 
     # Calculate the number of cycles we can perform in a day

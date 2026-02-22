@@ -8,7 +8,7 @@ from util.healthcheck import healthcheck
 import time
 
 from util.logging import logger
-from youtube.quota import initialize_policy
+from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import (
     calculate_interval_between_cycles,
     pull_my_subscriptions,
@@ -21,13 +21,14 @@ def main():
 
     oauth.get_authenticated_youtube_service()
 
-    interval_between_checks: int = calculate_interval_between_cycles()
     initialize_policy()
 
     while True:
+        initialize_usage()
         youtube = oauth.get_authenticated_youtube_service()
         if youtube:
             _, recently_uploaded_channels = pull_my_subscriptions(youtube)
+            interval_between_checks: int = calculate_interval_between_cycles()
             if recently_uploaded_channels:
                 videos = get_recent_videos(recently_uploaded_channels, youtube)
                 send_upload_notification(videos)
