@@ -1,6 +1,7 @@
 import math
 from datetime import datetime, timezone
 
+import pytz
 from googleapiclient.discovery import Resource
 
 from sqlalchemy import select, delete
@@ -188,9 +189,14 @@ def __increment_quota_usage(units_used: int):
                 "Quota policy for YouTube not found. Call initialize_policy() first."
             )
 
+        timezone = (
+            "America/Los_Angeles"  # YouTube API quota resets at midnight Pacific Time
+        )
+        now = datetime.now(pytz.timezone(timezone))
+
         stmt = select(QuotaUsage).where(
-            QuotaUsage.window_start <= datetime.now(),
-            QuotaUsage.window_end >= datetime.now(),
+            QuotaUsage.window_start <= now,
+            QuotaUsage.window_end >= now,
             QuotaUsage.config_id == policy.id,
         )
         usage: QuotaUsage | None = s.execute(stmt).scalar_one_or_none()
@@ -229,9 +235,14 @@ def __check_available_quota() -> bool:
                 "Quota policy for YouTube not found. Call initialize_policy() first."
             )
 
+        timezone = (
+            "America/Los_Angeles"  # YouTube API quota resets at midnight Pacific Time
+        )
+        now = datetime.now(pytz.timezone(timezone))
+
         stmt = select(QuotaUsage).where(
-            QuotaUsage.window_start <= datetime.now(),
-            QuotaUsage.window_end >= datetime.now(),
+            QuotaUsage.window_start <= now,
+            QuotaUsage.window_end >= now,
             QuotaUsage.config_id == policy.id,
         )
         usage: QuotaUsage | None = s.execute(stmt).scalar_one_or_none()
