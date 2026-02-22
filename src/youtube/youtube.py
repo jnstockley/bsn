@@ -264,7 +264,9 @@ def __check_available_quota() -> bool:
 
 def calculate_interval_between_cycles():
     with Session(engine) as s:
-        num_channels: int = len(s.execute(select(YoutubeChannel)).scalars().all()) + 1 # Add 1 to account for the healthcheck request that also uses the YouTube API
+        num_channels: int = (
+            len(s.execute(select(YoutubeChannel)).scalars().all()) + 1
+        )  # Add 1 to account for the healthcheck request that also uses the YouTube API
 
     total_requests_allowed_per_day = 10_000
     requests_per_cycle = math.ceil((num_channels + 1) / 50)
