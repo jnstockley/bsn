@@ -32,7 +32,12 @@ class TestNotifications(TestCase):
         """Clean up after tests"""
         pass
 
-    def _make_mock_video(self, channel_name="Test Channel", video_id="dQw4w9WgXcQ", title="Amazing Test Video"):
+    def _make_mock_video(
+        self,
+        channel_name="Test Channel",
+        video_id="dQw4w9WgXcQ",
+        title="Amazing Test Video",
+    ):
         """Helper to create a mock video object with attributes used by send_upload_notification"""
         mock_video = MagicMock()
         mock_video.id = video_id
@@ -69,20 +74,27 @@ class TestNotifications(TestCase):
 
         # Verify notify was called with correct title and body
         expected_title = "Test Channel has uploaded a new video to YouTube!"
-        expected_body = ("Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\nUploaded at: 2026-02-20 12:00:00")
+        expected_body = "Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\nUploaded at: 2026-02-20 12:00:00"
         mock_apprise_instance.notify.assert_called_once_with(
             title=expected_title, body=expected_body, attach=mock_video.thumbnail_url
         )
 
     @patch("notifications.notifications.apprise.Apprise")
-    @patch("notifications.notifications.apprise_urls", ["test://localhost", "test://example.com"])
+    @patch(
+        "notifications.notifications.apprise_urls",
+        ["test://localhost", "test://example.com"],
+    )
     def test_send_notifications_multiple_videos(self, mock_apprise_class):
         """Test sending notifications for multiple videos"""
         mock_apprise_instance = MagicMock()
         mock_apprise_class.return_value = mock_apprise_instance
 
-        v1 = self._make_mock_video(channel_name="Test Channel", video_id="aaa111", title="Video One")
-        v2 = self._make_mock_video(channel_name="Another Channel", video_id="bbb222", title="Video Two")
+        v1 = self._make_mock_video(
+            channel_name="Test Channel", video_id="aaa111", title="Video One"
+        )
+        v2 = self._make_mock_video(
+            channel_name="Another Channel", video_id="bbb222", title="Video Two"
+        )
 
         send_upload_notification([v1, v2])
 
@@ -120,7 +132,9 @@ class TestNotifications(TestCase):
     @patch("notifications.notifications.logger")
     @patch("notifications.notifications.apprise.Apprise")
     @patch("notifications.notifications.apprise_urls", ["test://localhost"])
-    def test_send_notifications_logs_info_for_each_video(self, mock_apprise_class, mock_logger):
+    def test_send_notifications_logs_info_for_each_video(
+        self, mock_apprise_class, mock_logger
+    ):
         """Test that info is logged when sending notifications for videos"""
         mock_apprise_instance = MagicMock()
         mock_apprise_class.return_value = mock_apprise_instance
@@ -139,7 +153,9 @@ class TestNotifications(TestCase):
         mock_apprise_instance = MagicMock()
         mock_apprise_class.return_value = mock_apprise_instance
 
-        special_video = self._make_mock_video(title="Test Video: Amazing & Cool! (2026)", video_id="abc123")
+        special_video = self._make_mock_video(
+            title="Test Video: Amazing & Cool! (2026)", video_id="abc123"
+        )
 
         send_upload_notification([special_video])
 
@@ -150,7 +166,9 @@ class TestNotifications(TestCase):
 
     @patch("notifications.notifications.apprise.Apprise")
     @patch("notifications.notifications.apprise_urls", ["test://localhost"])
-    def test_send_notifications_channel_with_special_characters(self, mock_apprise_class):
+    def test_send_notifications_channel_with_special_characters(
+        self, mock_apprise_class
+    ):
         """Test sending notification with channel name containing special characters"""
         mock_apprise_instance = MagicMock()
         mock_apprise_class.return_value = mock_apprise_instance
@@ -162,7 +180,10 @@ class TestNotifications(TestCase):
         # Verify notify was called with the special characters preserved in title
         mock_apprise_instance.notify.assert_called_once()
         call_args = mock_apprise_instance.notify.call_args
-        assert "Test & Demo Channel™ has uploaded a new video to YouTube!" in call_args[1]["title"]
+        assert (
+            "Test & Demo Channel™ has uploaded a new video to YouTube!"
+            in call_args[1]["title"]
+        )
 
     def test_send_notifications_empty_videos_list(self):
         """Test handling of empty videos list (no notifications should be sent)"""

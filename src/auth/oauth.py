@@ -50,11 +50,13 @@ _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 _REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 
-_DEFAULT_SCOPES = " ".join([
-    "https://www.googleapis.com/auth/youtube.readonly",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-])
+_DEFAULT_SCOPES = " ".join(
+    [
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+    ]
+)
 _YOUTUBE_API_SERVICE = "youtube"
 _YOUTUBE_API_VERSION = "v3"
 
@@ -145,7 +147,9 @@ def _row_to_credentials(row: OauthCredential) -> Credentials:
     )
 
 
-def _is_expired(creds: Credentials, margin_seconds: int = _REFRESH_MARGIN_SECONDS) -> bool:
+def _is_expired(
+    creds: Credentials, margin_seconds: int = _REFRESH_MARGIN_SECONDS
+) -> bool:
     """Return *True* if the credential is expired or will expire within *margin_seconds*."""
     if creds.expiry is None:
         # No expiry information – treat as valid (server will reject if not).
@@ -176,7 +180,9 @@ def refresh_credential(
     stale row is deleted so that the next startup triggers a fresh device auth).
     """
     if not row.refresh_token:
-        logger.error("No refresh token stored – cannot refresh credential id=%s.", row.id)
+        logger.error(
+            "No refresh token stored – cannot refresh credential id=%s.", row.id
+        )
         _delete_credential(row)
         return None
 
@@ -311,9 +317,13 @@ def authenticate_with_device_code(
         f"{'=' * 60}\n",
         flush=True,
     )
-    logger.info("Waiting for user to complete device authorisation (code: %s)…", user_code)
+    logger.info(
+        "Waiting for user to complete device authorisation (code: %s)…", user_code
+    )
 
-    token_data = _poll_for_tokens(client_id, client_secret, device_code, interval, expires_in)
+    token_data = _poll_for_tokens(
+        client_id, client_secret, device_code, interval, expires_in
+    )
     if not token_data:
         return None
 
@@ -383,7 +393,8 @@ def revoke_expired_tokens() -> None:
         if row.refresh_token:
             # Attempt a refresh; refresh_credential handles DB updates/deletions.
             logger.info(
-                "Credential id=%s is expired – attempting refresh before revoke check.", row.id
+                "Credential id=%s is expired – attempting refresh before revoke check.",
+                row.id,
             )
             refresh_credential(row)
         else:
@@ -400,7 +411,9 @@ def revoke_expired_tokens() -> None:
                         timeout=10,
                     )
                 except Exception as exc:
-                    logger.warning("Revoke request failed for credential id=%s: %s", row.id, exc)
+                    logger.warning(
+                        "Revoke request failed for credential id=%s: %s", row.id, exc
+                    )
             _delete_credential(row)
 
 
@@ -457,11 +470,8 @@ def get_authenticated_youtube_service(
             _YOUTUBE_API_VERSION,
             credentials=creds,
         )
-        logger.info(
-            "Built authenticated YouTube service for credential id=%s.", row.id
-        )
+        logger.info("Built authenticated YouTube service for credential id=%s.", row.id)
         return youtube
     except Exception as exc:
         logger.error("Failed to build YouTube service: %s", exc)
         return None
-

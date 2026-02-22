@@ -60,7 +60,10 @@ class TestHealthcheck(TestCase):
     def test_healthcheck_channel_not_found_empty_items(self, mock_oauth, mock_logger):
         mock_youtube = MagicMock()
         mock_request = MagicMock()
-        mock_request.execute.return_value = {"items": [], "pageInfo": {"totalResults": 0}}
+        mock_request.execute.return_value = {
+            "items": [],
+            "pageInfo": {"totalResults": 0},
+        }
         mock_youtube.channels().list.return_value = mock_request
         mock_oauth.get_authenticated_youtube_service.return_value = mock_youtube
 
@@ -74,7 +77,10 @@ class TestHealthcheck(TestCase):
     def test_healthcheck_calls_oauth_get_authenticated_service(self, mock_oauth):
         mock_youtube = MagicMock()
         mock_request = MagicMock()
-        mock_request.execute.return_value = {"items": [{"id": self.example_channel_id}], "pageInfo": {"totalResults": 1}}
+        mock_request.execute.return_value = {
+            "items": [{"id": self.example_channel_id}],
+            "pageInfo": {"totalResults": 1},
+        }
         mock_youtube.channels().list.return_value = mock_request
         mock_oauth.get_authenticated_youtube_service.return_value = mock_youtube
 

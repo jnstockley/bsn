@@ -68,12 +68,16 @@ def _make_row(
 
 def _future_expiry(seconds: int = 3600) -> datetime:
     """Return a naive-UTC datetime that is *seconds* in the future."""
-    return (datetime.now(tz=timezone.utc) + timedelta(seconds=seconds)).replace(tzinfo=None)
+    return (datetime.now(tz=timezone.utc) + timedelta(seconds=seconds)).replace(
+        tzinfo=None
+    )
 
 
 def _past_expiry(seconds: int = 3600) -> datetime:
     """Return a naive-UTC datetime that is *seconds* in the past."""
-    return (datetime.now(tz=timezone.utc) - timedelta(seconds=seconds)).replace(tzinfo=None)
+    return (datetime.now(tz=timezone.utc) - timedelta(seconds=seconds)).replace(
+        tzinfo=None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +140,7 @@ class TestSaveCredential(TestCase):
         mock_session.expunge.return_value = None
 
         creds = self._make_google_creds()
-        result = _save_credential(
+        _ = _save_credential(
             creds,
             user_id="u1",
             user_email="u@e.com",
@@ -169,7 +173,6 @@ class TestSaveCredential(TestCase):
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
 
-        captured_row = OauthCredential()
         mock_session.add.side_effect = lambda r: None
         mock_session.expunge.return_value = None
 
@@ -182,8 +185,6 @@ class TestSaveCredential(TestCase):
 
         # Capture the row that would be set
         rows_seen = []
-
-        original_add = mock_session.add
 
         def capture_add(row):
             rows_seen.append(row)
@@ -350,7 +351,9 @@ class TestRefreshCredential(TestCase):
 
     @patch("auth.oauth_v2._delete_credential")
     @patch("auth.oauth_v2._row_to_credentials")
-    def test_refresh_exception_deletes_and_returns_none(self, mock_row_to_creds, mock_delete):
+    def test_refresh_exception_deletes_and_returns_none(
+        self, mock_row_to_creds, mock_delete
+    ):
         row = _make_row()
         mock_creds = MagicMock()
         mock_creds.refresh.side_effect = Exception("network error")
@@ -424,7 +427,9 @@ class TestPollForTokens(TestCase):
         mock_post.side_effect = [pending, success]
 
         with patch("auth.oauth_v2.time.monotonic", side_effect=[0, 1, 2, 999]):
-            result = _poll_for_tokens("cid", "csec", "dev-code", interval=1, expires_in=300)
+            result = _poll_for_tokens(
+                "cid", "csec", "dev-code", interval=1, expires_in=300
+            )
 
         self.assertEqual(result["access_token"], "tok")
 
@@ -440,7 +445,7 @@ class TestPollForTokens(TestCase):
         mock_post.side_effect = [slow, success]
 
         with patch("auth.oauth_v2.time.monotonic", side_effect=[0, 1, 2, 999]):
-            result = _poll_for_tokens("cid", "csec", "dev-code", interval=5, expires_in=300)
+            _poll_for_tokens("cid", "csec", "dev-code", interval=5, expires_in=300)
 
         # Sleep should have been called with an increased interval (10 after slow_down)
         calls = mock_sleep.call_args_list
@@ -454,7 +459,9 @@ class TestPollForTokens(TestCase):
         mock_post.return_value = mock_resp
 
         with patch("auth.oauth_v2.time.monotonic", side_effect=[0, 1, 999]):
-            result = _poll_for_tokens("cid", "csec", "dev-code", interval=1, expires_in=300)
+            result = _poll_for_tokens(
+                "cid", "csec", "dev-code", interval=1, expires_in=300
+            )
 
         self.assertIsNone(result)
 
@@ -534,18 +541,14 @@ class TestAuthenticateWithDeviceCode(TestCase):
 
     def test_returns_none_when_no_client_id(self):
         with patch.dict("os.environ", {}, clear=True):
-            result = authenticate_with_device_code(
-                client_id=None, client_secret=None
-            )
+            result = authenticate_with_device_code(client_id=None, client_secret=None)
         self.assertIsNone(result)
 
     @patch("auth.oauth_v2._fetch_device_code")
     def test_returns_none_when_fetch_device_code_fails(self, mock_fetch):
         mock_fetch.side_effect = Exception("network error")
 
-        result = authenticate_with_device_code(
-            client_id="cid", client_secret="csec"
-        )
+        result = authenticate_with_device_code(client_id="cid", client_secret="csec")
 
         self.assertIsNone(result)
 
@@ -626,7 +629,9 @@ class TestRevokeExpiredTokens(TestCase):
     @patch("auth.oauth_v2._delete_credential")
     @patch("auth.oauth_v2._is_expired")
     @patch("auth.oauth_v2.Session")
-    def test_skips_valid_credentials(self, mock_session_cls, mock_is_expired, mock_delete):
+    def test_skips_valid_credentials(
+        self, mock_session_cls, mock_is_expired, mock_delete
+    ):
         row = _make_row()
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -746,8 +751,10 @@ class TestGetAuthenticatedYoutubeService(TestCase):
         mock_youtube = MagicMock()
         mock_build.return_value = mock_youtube
 
-        with patch("auth.oauth_v2._row_to_credentials") as mock_r2c, \
-             patch("auth.oauth_v2._is_expired", return_value=False):
+        with (
+            patch("auth.oauth_v2._row_to_credentials") as mock_r2c,
+            patch("auth.oauth_v2._is_expired", return_value=False),
+        ):
             mock_r2c.return_value = MagicMock()
             result = get_authenticated_youtube_service()
 
@@ -852,4 +859,3 @@ class TestGetAuthenticatedYoutubeService(TestCase):
 
         mock_auth.assert_called_once()
         self.assertIsNotNone(result)
-

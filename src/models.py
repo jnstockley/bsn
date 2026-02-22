@@ -59,8 +59,10 @@ class OauthCredential(Base):
     def __repr__(self):
         return f"OauthCredential(id={self.id}, client_id={self.client_id}, user_email={self.user_email})"
 
+
 class Service(Enum):
     YOUTUBE = "youtube"
+
 
 class QuotaPolicy(Base):
     """Defines the quota limit/configuration for a service.
@@ -75,7 +77,9 @@ class QuotaPolicy(Base):
     service: Mapped[Service] = mapped_column(nullable=False, unique=True)
     limit: Mapped[int] = mapped_column(nullable=False)
 
-    usages: Mapped[list["QuotaUsage"]] = relationship(back_populates="config", cascade="all, delete-orphan")
+    usages: Mapped[list["QuotaUsage"]] = relationship(
+        back_populates="config", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"QuotaPolicy(id={self.id}, service={self.service}, limit={self.limit})"

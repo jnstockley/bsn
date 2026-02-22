@@ -17,9 +17,7 @@ from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from googleapiclient.errors import HttpError
 
-from models import YoutubeChannel, OauthCredential
 from youtube.youtube import (
     pull_my_subscriptions,
     get_recent_videos,
@@ -57,7 +55,9 @@ class TestYouTube(TestCase):
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
         # Patch the internal transformer to avoid DB writes and return predictable objects
-        with patch("youtube.youtube.__youtube_subs_response_to_channels") as mock_transform:
+        with patch(
+            "youtube.youtube.__youtube_subs_response_to_channels"
+        ) as mock_transform:
             mock_transform.return_value = (["chan_obj"], ["recent_obj"])
 
             channels, recently = pull_my_subscriptions(self.mock_youtube)
@@ -94,7 +94,9 @@ class TestYouTube(TestCase):
         mock_request.execute.side_effect = [mock_response_page1, mock_response_page2]
         self.mock_youtube.subscriptions().list.return_value = mock_request
 
-        with patch("youtube.youtube.__youtube_subs_response_to_channels") as mock_transform:
+        with patch(
+            "youtube.youtube.__youtube_subs_response_to_channels"
+        ) as mock_transform:
             mock_transform.return_value = (["c1", "c2"], ["recent_obj"])
 
             channels, recently = pull_my_subscriptions(self.mock_youtube)
@@ -112,7 +114,11 @@ class TestYouTube(TestCase):
         mock_channel.id = self.sample_channel_id
 
         now = datetime.now(timezone.utc)
-        published_at = (now - timedelta(minutes=1)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        published_at = (
+            (now - timedelta(minutes=1))
+            .astimezone(timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
 
         mock_response = {
             "items": [
@@ -165,14 +171,21 @@ class TestYouTube(TestCase):
         mock_channel.id = self.sample_channel_id
 
         now = datetime.now(timezone.utc)
-        published_at = (now - timedelta(minutes=1)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        published_at = (
+            (now - timedelta(minutes=1))
+            .astimezone(timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
 
         mock_response = {
             "items": [
                 {
                     "snippet": {"title": "Test Video"},
                     "status": {"privacyStatus": "private"},
-                    "contentDetails": {"videoPublishedAt": published_at, "videoId": "vid123"},
+                    "contentDetails": {
+                        "videoPublishedAt": published_at,
+                        "videoId": "vid123",
+                    },
                 }
             ]
         }

@@ -1,6 +1,6 @@
 import sys
 from unittest import TestCase
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from main import main
 
@@ -21,11 +21,18 @@ class TestMainIntegration(TestCase):
     @patch("main.pull_my_subscriptions")
     @patch("main.oauth")
     def test_main_runs_subscription_and_video_checks(
-        self, mock_oauth, mock_pull_subs, mock_get_recent, mock_calc_interval, mock_sleep
+        self,
+        mock_oauth,
+        mock_pull_subs,
+        mock_get_recent,
+        mock_calc_interval,
+        mock_sleep,
     ):
         """Test that main runs pull_my_subscriptions and get_recent_videos and sends notifications"""
         mock_calc_interval.return_value = 60
-        mock_oauth.get_authenticated_youtube_service.return_value = self.mock_youtube_service
+        mock_oauth.get_authenticated_youtube_service.return_value = (
+            self.mock_youtube_service
+        )
 
         # Simulate recently_uploaded_channels returned by pull_my_subscriptions
         mock_pull_subs.return_value = ([], [MagicMock()])
@@ -51,7 +58,9 @@ class TestMainIntegration(TestCase):
         """Test that main sleeps for the calculated interval between checks"""
         expected_interval = 120
         mock_calc_interval.return_value = expected_interval
-        mock_oauth.get_authenticated_youtube_service.return_value = self.mock_youtube_service
+        mock_oauth.get_authenticated_youtube_service.return_value = (
+            self.mock_youtube_service
+        )
 
         # Ensure pull_my_subscriptions returns a pair to avoid unpack errors
         mock_pull_subs.return_value = ([], [])
@@ -74,7 +83,9 @@ class TestMainIntegration(TestCase):
     ):
         """Test that main gets a fresh YouTube service on each loop iteration"""
         mock_calc_interval.return_value = 60
-        mock_oauth.get_authenticated_youtube_service.return_value = self.mock_youtube_service
+        mock_oauth.get_authenticated_youtube_service.return_value = (
+            self.mock_youtube_service
+        )
 
         # Ensure pull_my_subscriptions returns a pair to avoid unpack errors
         mock_pull_subs.return_value = ([], [])
@@ -93,7 +104,9 @@ class TestMainIntegration(TestCase):
     @patch("main.healthcheck")
     @patch("main.load_dotenv")
     @patch("sys.argv", ["main.py", "healthcheck"])
-    def test_main_entry_point_runs_healthcheck(self, mock_load_dotenv, mock_healthcheck):
+    def test_main_entry_point_runs_healthcheck(
+        self, mock_load_dotenv, mock_healthcheck
+    ):
         """Test that main entry point runs healthcheck when argv[1] is 'healthcheck'"""
         with patch("main.__name__", "__main__"):
             exec(

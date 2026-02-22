@@ -63,7 +63,7 @@ def next_reset_for_config_utc(config, now_utc: Optional[datetime] = None) -> dat
     return next_daily_reset_utc(
         reset_hour=getattr(config, "reset_hour", 0) or 0,
         reset_minute=getattr(config, "reset_minute", 0) or 0,
-        reset_timezone=getattr(config, "reset_timezone", "America/Los_Angeles") or "America/Los_Angeles",
+        reset_timezone=getattr(config, "reset_timezone", "America/Los_Angeles")
+        or "America/Los_Angeles",
         now_utc=now_utc,
     )
-
