@@ -98,7 +98,7 @@ class TestMainIntegration(TestCase):
         except KeyboardInterrupt:
             pass
 
-        assert mock_oauth.get_authenticated_youtube_service.call_count == 2
+        assert mock_oauth.get_authenticated_youtube_service.call_count == 3
 
     # Tests for main entry point with command line arguments
     @patch("main.healthcheck")
