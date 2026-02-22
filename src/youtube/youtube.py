@@ -84,8 +84,6 @@ def get_recent_videos(
             youtube_channel_id=channel_id,
         )
 
-        logger.info(f"Found new video: {video}")
-
         stmt = delete(YoutubeVideo).where(YoutubeVideo.youtube_channel_id == channel_id)
 
         with Session(engine) as s:
@@ -96,6 +94,8 @@ def get_recent_videos(
             # Eager load the youtube_channel relationship to prevent DetachedInstanceError
             _ = video.youtube_channel
             s.expunge(video)
+
+        logger.info(f"Found new video: {video}")
 
         videos.append(video)
 
