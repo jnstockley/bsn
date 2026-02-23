@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -44,7 +45,7 @@ class TestNotifications(TestCase):
         mock_video.title = title
         mock_video.url = f"https://www.youtube.com/watch?v={video_id}"
         mock_video.thumbnail_url = "https://img"
-        mock_video.uploaded_at = "2026-02-20 12:00:00"
+        mock_video.uploaded_at = datetime(2026, 2, 20, 12, 0, 0)
         mock_video.youtube_channel_id = "UC1234567890"
 
         mock_channel = MagicMock()
@@ -74,7 +75,7 @@ class TestNotifications(TestCase):
 
         # Verify notify was called with correct title and body
         expected_title = "Test Channel has uploaded a new video to YouTube!"
-        expected_body = "Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\nUploaded at: 2026-02-20 12:00:00"
+        expected_body = "Amazing Test Video\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\nUploaded at: February 20, 2026 12:00 PM"
         mock_apprise_instance.notify.assert_called_once_with(
             title=expected_title, body=expected_body, attach=mock_video.thumbnail_url
         )

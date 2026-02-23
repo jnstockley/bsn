@@ -84,9 +84,20 @@ def get_recent_videos(
             youtube_channel_id=channel_id,
         )
 
-        stmt = delete(YoutubeVideo).where(YoutubeVideo.youtube_channel_id == channel_id)
-
         with Session(engine) as s:
+            stmt = select(YoutubeVideo).where(YoutubeVideo.id == video.id)
+            existing_video = s.execute(stmt).scalar_one_or_none()
+
+            if existing_video:
+                logger.warning(
+                    f"Skipping video {video.title} from channel {video.youtube_channel.name} because it already exists in the database"
+                )
+                continue
+
+            stmt = delete(YoutubeVideo).where(
+                YoutubeVideo.youtube_channel_id == channel_id
+            )
+
             s.execute(stmt)
             s.add(video)
             s.commit()
@@ -94,6 +105,19 @@ def get_recent_videos(
             # Eager load the youtube_channel relationship to prevent DetachedInstanceError
             _ = video.youtube_channel
             s.expunge(video)
+            logger.debug(
+                "Added video to database and detached from session: {video.title} from channel {video.youtube_channel.name}"
+            )
+
+        interval_between_cycles = (
+            calculate_interval_between_cycles() * 3
+        )  # Multiply by 3 to add some buffer time in case the check runs a bit later than scheduled
+        now = datetime.now().astimezone()
+        if (now - local_time).total_seconds() > interval_between_cycles:
+            logger.warning(
+                f"Skipping video {body['snippet']['title']} from channel {channel_id} because it was uploaded more than {interval_between_cycles} seconds ago"
+            )
+            continue
 
         logger.info(f"Found new video: {video}")
 
