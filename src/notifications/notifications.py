@@ -13,7 +13,7 @@ def send_upload_notification(videos: list[YoutubeVideo]):
 
     for video in videos:
         title = f"{video.youtube_channel.name} has uploaded a new video to YouTube!"
-        body = f"{video.title}\n{video.url}\nUploaded at: {video.uploaded_at}"
+        body = f"{video.title}\n{video.url}\nUploaded at: {video.uploaded_at.strftime('%B %d, %Y %I:%M %p')}"
         logger.info(
             f"Sending notification for video {video.title} from channel {video.youtube_channel.name}"
         )

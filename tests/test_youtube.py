@@ -156,8 +156,10 @@ class TestYouTube(TestCase):
         mock_channel.id = self.sample_channel_id
 
         now = datetime.now(timezone.utc)
+        # Use a very recent timestamp (5s ago) so the video passes the age
+        # check: interval = ceil(86400 / (10000 // ceil(2/50))) = 9s × 3 = 27s
         published_at = (
-            (now - timedelta(minutes=1))
+            (now - timedelta(seconds=5))
             .astimezone(timezone.utc)
             .strftime("%Y-%m-%dT%H:%M:%SZ")
         )
@@ -182,23 +184,66 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        # 1 channel → 1 __increment_quota_usage call
-        _, mock_session_cm = self._make_quota_session_cm(increment_calls=1)
+        # The new logic makes these Session/DB calls per channel:
+        #   1. __check_available_quota  → policy + usage (scalar_one_or_none x2)
+        #   2. __increment_quota_usage  → policy + usage (scalar_one_or_none x2)
+        #   3. DB session for existing-video check → scalar_one_or_none → None
+        #      then delete + add (no scalar_one_or_none)
+        #   4. calculate_interval_between_cycles → scalars().all()
+        #
+        # We use a single shared session whose scalar_one_or_none side-effects
+        # cover calls 1-3, and override execute() for call 4.
 
-        # logger.info(f"Found new video: {video}") is called *before* the DB
-        # session block that loads video.youtube_channel. The f-string eagerly
-        # evaluates YoutubeVideo.__repr__, which accesses
-        # self.youtube_channel.name and raises AttributeError on the unloaded
-        # (None) relationship. Patch YoutubeVideo so instances are MagicMocks
-        # with pre-set attributes — and patch delete() so SQLAlchemy's ORM
-        # coercion doesn't receive the mocked class in place of the real one.
+        quota_check_policy = MagicMock()
+        quota_check_usage = MagicMock()
+        quota_check_usage.quota_remaining = 9999
+
+        quota_inc_policy = MagicMock()
+        quota_inc_usage = MagicMock()
+        quota_inc_usage.quota_remaining = 9999
+
+        # calculate_interval_between_cycles: returns a channel list
+        calc_channels_result = MagicMock()
+        calc_channels_result.scalars.return_value.all.return_value = [MagicMock()]
+
+        mock_session = MagicMock()
+        scalar_side_effects = [
+            quota_check_policy,
+            quota_check_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            None,  # existing video check → not in DB
+        ]
+        mock_session.execute.return_value.scalar_one_or_none.side_effect = (
+            scalar_side_effects
+        )
+
+        # Override execute for the 6th call (calculate_interval_between_cycles)
+        original_execute = mock_session.execute
+        call_count = [0]
+
+        def smart_execute(stmt):
+            call_count[0] += 1
+            if call_count[0] == 6:
+                return calc_channels_result
+            return original_execute(stmt)
+
+        mock_session.execute = smart_execute
+
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_video = MagicMock()
         mock_video.id = "vid123"
         mock_video.title = "Test Video"
         mock_video.youtube_channel_id = self.sample_channel_id
 
+        # Patch select + delete so SQLAlchemy never receives the mock class,
+        # avoiding ORM coercion errors.
         with (
             patch("youtube.youtube.YoutubeVideo", return_value=mock_video),
+            patch("youtube.youtube.select"),
             patch("youtube.youtube.delete"),
             patch("youtube.youtube.Session", return_value=mock_session_cm),
         ):
@@ -245,6 +290,158 @@ class TestYouTube(TestCase):
         with patch("youtube.youtube.Session", return_value=mock_session_cm):
             videos = get_recent_videos([mock_channel], self.mock_youtube)
 
+        assert videos == []
+
+    def test_get_recent_videos_skips_existing_video(self):
+        """When a video already exists in the DB, get_recent_videos should skip it"""
+        mock_channel = MagicMock()
+        mock_channel.id = self.sample_channel_id
+
+        now = datetime.now(timezone.utc)
+        published_at = (
+            (now - timedelta(seconds=5))
+            .astimezone(timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+
+        mock_response = {
+            "items": [
+                {
+                    "snippet": {
+                        "title": "Test Video",
+                        "thumbnails": {"high": {"url": "https://img"}},
+                    },
+                    "status": {"privacyStatus": "public"},
+                    "contentDetails": {
+                        "videoPublishedAt": published_at,
+                        "videoId": "vid123",
+                    },
+                }
+            ]
+        }
+
+        mock_request = MagicMock()
+        mock_request.execute.return_value = mock_response
+        self.mock_youtube.playlistItems().list.return_value = mock_request
+
+        # quota check + quota increment (2 reads each), then existing video check → existing
+        quota_check_policy = MagicMock()
+        quota_check_usage = MagicMock()
+        quota_check_usage.quota_remaining = 9999
+        quota_inc_policy = MagicMock()
+        quota_inc_usage = MagicMock()
+        quota_inc_usage.quota_remaining = 9999
+        existing_video = MagicMock()  # non-None → video already in DB
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.side_effect = [
+            quota_check_policy,
+            quota_check_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            existing_video,  # existing video found → skip
+        ]
+
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
+        mock_video = MagicMock()
+        mock_video.id = "vid123"
+        mock_video.title = "Test Video"
+        mock_video.youtube_channel_id = self.sample_channel_id
+
+        with (
+            patch("youtube.youtube.YoutubeVideo", return_value=mock_video),
+            patch("youtube.youtube.select"),
+            patch("youtube.youtube.delete"),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+        ):
+            videos = get_recent_videos([mock_channel], self.mock_youtube)
+
+        assert videos == []
+
+    def test_get_recent_videos_skips_too_old(self):
+        """When a video was uploaded longer ago than the cycle interval, it should be skipped"""
+        mock_channel = MagicMock()
+        mock_channel.id = self.sample_channel_id
+
+        now = datetime.now(timezone.utc)
+        # Publish timestamp well outside the interval window (10 minutes ago)
+        published_at = (
+            (now - timedelta(minutes=10))
+            .astimezone(timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+
+        mock_response = {
+            "items": [
+                {
+                    "snippet": {
+                        "title": "Old Video",
+                        "thumbnails": {"high": {"url": "https://img"}},
+                    },
+                    "status": {"privacyStatus": "public"},
+                    "contentDetails": {
+                        "videoPublishedAt": published_at,
+                        "videoId": "vid_old",
+                    },
+                }
+            ]
+        }
+
+        mock_request = MagicMock()
+        mock_request.execute.return_value = mock_response
+        self.mock_youtube.playlistItems().list.return_value = mock_request
+
+        quota_check_policy = MagicMock()
+        quota_check_usage = MagicMock()
+        quota_check_usage.quota_remaining = 9999
+        quota_inc_policy = MagicMock()
+        quota_inc_usage = MagicMock()
+        quota_inc_usage.quota_remaining = 9999
+
+        calc_channels_result = MagicMock()
+        calc_channels_result.scalars.return_value.all.return_value = [MagicMock()]
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.side_effect = [
+            quota_check_policy,
+            quota_check_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            None,  # existing video check → not in DB, so it gets saved
+        ]
+
+        original_execute = mock_session.execute
+        call_count = [0]
+
+        def smart_execute(stmt):
+            call_count[0] += 1
+            if call_count[0] == 6:
+                return calc_channels_result
+            return original_execute(stmt)
+
+        mock_session.execute = smart_execute
+
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
+        mock_video = MagicMock()
+        mock_video.id = "vid_old"
+        mock_video.title = "Old Video"
+        mock_video.youtube_channel_id = self.sample_channel_id
+
+        with (
+            patch("youtube.youtube.YoutubeVideo", return_value=mock_video),
+            patch("youtube.youtube.select"),
+            patch("youtube.youtube.delete"),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+        ):
+            videos = get_recent_videos([mock_channel], self.mock_youtube)
+
+        # Video is saved to DB but NOT returned because it's too old
         assert videos == []
 
     # Tests for calculate_interval_between_cycles
