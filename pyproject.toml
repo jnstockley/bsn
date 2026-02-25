@@ -9,7 +9,7 @@ dependencies = [
     "google-api-python-client==2.190.0",
     "python-dotenv==1.2.1",
     "pytz==2025.2",
-    "sqlalchemy==2.0.46",
+    "sqlalchemy==2.0.47",
 ]
 license-files = ["LICENSE"]
 authors = [
