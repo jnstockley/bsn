@@ -8,7 +8,7 @@ dependencies = [
     "apprise==1.9.7",
     "google-api-python-client==2.191.0",
     "python-dotenv==1.2.2",
-    "pytz==2025.2",
+    "pytz==2026.1.post1",
     "sqlalchemy==2.0.48",
 ]
 license-files = ["LICENSE"]
