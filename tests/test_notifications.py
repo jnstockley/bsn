@@ -47,6 +47,9 @@ class TestNotifications(TestCase):
         mock_video.thumbnail_url = "https://img"
         mock_video.uploaded_at = datetime(2026, 2, 20, 12, 0, 0)
         mock_video.youtube_channel_id = "UC1234567890"
+        # New notification logic checks is_livestream / is_short; tests assume regular uploads
+        mock_video.is_livestream = False
+        mock_video.is_short = False
 
         mock_channel = MagicMock()
         mock_channel.name = channel_name

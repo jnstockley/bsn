@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytz
 from googleapiclient.discovery import Resource
+from googleapiclient.errors import HttpError
 
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
@@ -58,7 +59,7 @@ def get_recent_videos(
         response = request.execute()
         __increment_quota_usage(1)
 
-        body = response["items"][0]
+        body: dict = response["items"][0]
 
         if body["status"]["privacyStatus"] != "public":
             logger.info(
@@ -78,8 +79,8 @@ def get_recent_videos(
             title=body["snippet"]["title"],
             url=f"https://www.youtube.com/watch?v={body['contentDetails']['videoId']}",
             thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
-            is_short=False,
-            is_livestream=False,
+            is_short=__is_short(body, youtube),
+            is_livestream=__is_live(body, youtube),
             uploaded_at=local_time,
             youtube_channel_id=channel_id,
         )
@@ -90,7 +91,7 @@ def get_recent_videos(
 
             if existing_video:
                 logger.warning(
-                    f"Skipping video {video.title} from channel {video.youtube_channel.name} because it already exists in the database"
+                    f"Skipping video {video.title} from channel {existing_video.youtube_channel.name} because it already exists in the database"
                 )
                 continue
 
@@ -177,6 +178,46 @@ def __youtube_subs_response_to_channels(
         s.commit()
 
     return all_channels, recently_uploaded_channels
+
+
+def __is_short(body: dict, youtube: Resource) -> bool:
+    shorts_playlist_id: str = body["snippet"]["channelId"].replace("UC", "UUSH")
+    short_id: str = body["contentDetails"]["videoId"]
+
+    request = youtube.playlistItems().list(
+        part="snippet,status,contentDetails",
+        playlistId=shorts_playlist_id,
+        videoId=short_id,
+        maxResults=1,
+    )
+
+    logger.debug(f"Making request {request.uri}")
+    try:
+        response = request.execute()
+    except HttpError as err:
+        logger.warning(f"Error checking if video {short_id} is a short: {err}")
+        return False
+    __increment_quota_usage(1)
+    return response["pageInfo"]["totalResults"] > 0
+
+
+def __is_live(body: dict, youtube: Resource) -> bool:
+    livestream_id: str = body["contentDetails"]["videoId"]
+
+    request = youtube.videos().list(
+        part="snippet,liveStreamingDetails",
+        id=livestream_id,
+    )
+
+    logger.debug(f"Making request {request.uri}")
+    response = request.execute()
+    __increment_quota_usage(1)
+
+    body = response["items"][0]
+
+    if "liveBroadcastContent" in body["snippet"]:
+        return body["snippet"]["liveBroadcastContent"] == "live"
+    return False
 
 
 def __make_request(request, units_used: int = 1) -> dict:
