@@ -170,6 +170,7 @@ class TestYouTube(TestCase):
                     "snippet": {
                         "title": "Test Video",
                         "thumbnails": {"high": {"url": "https://img"}},
+                        "channelId": mock_channel.id,
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -177,7 +178,8 @@ class TestYouTube(TestCase):
                         "videoId": "vid123",
                     },
                 }
-            ]
+            ],
+            "pageInfo": {"totalResults": 1},
         }
 
         mock_request = MagicMock()
@@ -212,6 +214,10 @@ class TestYouTube(TestCase):
             quota_check_usage,
             quota_inc_policy,
             quota_inc_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            quota_inc_policy,
+            quota_inc_usage,
             None,  # existing video check → not in DB
         ]
         mock_session.execute.return_value.scalar_one_or_none.side_effect = (
@@ -224,7 +230,10 @@ class TestYouTube(TestCase):
 
         def smart_execute(stmt):
             call_count[0] += 1
-            if call_count[0] == 6:
+            # The calculate_interval_between_cycles() call happens after several
+            # quota-related DB calls; ensure we return the mocked channel list on
+            # the 10th execute call which corresponds to that query in these tests.
+            if call_count[0] == 10:
                 return calc_channels_result
             return original_execute(stmt)
 
@@ -310,6 +319,7 @@ class TestYouTube(TestCase):
                     "snippet": {
                         "title": "Test Video",
                         "thumbnails": {"high": {"url": "https://img"}},
+                        "channelId": mock_channel.id,
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -317,7 +327,8 @@ class TestYouTube(TestCase):
                         "videoId": "vid123",
                     },
                 }
-            ]
+            ],
+            "pageInfo": {"totalResults": 1},
         }
 
         mock_request = MagicMock()
@@ -337,6 +348,10 @@ class TestYouTube(TestCase):
         mock_session.execute.return_value.scalar_one_or_none.side_effect = [
             quota_check_policy,
             quota_check_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            quota_inc_policy,
+            quota_inc_usage,
             quota_inc_policy,
             quota_inc_usage,
             existing_video,  # existing video found → skip
@@ -380,6 +395,7 @@ class TestYouTube(TestCase):
                     "snippet": {
                         "title": "Old Video",
                         "thumbnails": {"high": {"url": "https://img"}},
+                        "channelId": mock_channel.id,
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -387,7 +403,8 @@ class TestYouTube(TestCase):
                         "videoId": "vid_old",
                     },
                 }
-            ]
+            ],
+            "pageInfo": {"totalResults": 1},
         }
 
         mock_request = MagicMock()
@@ -410,6 +427,10 @@ class TestYouTube(TestCase):
             quota_check_usage,
             quota_inc_policy,
             quota_inc_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            quota_inc_policy,
+            quota_inc_usage,
             None,  # existing video check → not in DB, so it gets saved
         ]
 
@@ -418,7 +439,7 @@ class TestYouTube(TestCase):
 
         def smart_execute(stmt):
             call_count[0] += 1
-            if call_count[0] == 6:
+            if call_count[0] == 10:
                 return calc_channels_result
             return original_execute(stmt)
 
