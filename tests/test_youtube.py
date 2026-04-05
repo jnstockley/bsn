@@ -15,7 +15,7 @@ Changes made:
 
 from datetime import datetime, timedelta, timezone
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 
 from youtube.youtube import (
@@ -23,6 +23,7 @@ from youtube.youtube import (
     get_recent_videos,
     calculate_interval_between_cycles,
     _chunk_list,
+    check_rss_for_new_videos,
 )
 
 
@@ -98,6 +99,7 @@ class TestYouTube(TestCase):
             patch(
                 "youtube.youtube.__youtube_subs_response_to_channels"
             ) as mock_transform,
+            patch("youtube.youtube.check_rss_for_new_videos", return_value=[]),
         ):
             mock_transform.return_value = (["chan_obj"], ["recent_obj"])
             channels, recently = pull_my_subscriptions(self.mock_youtube)
@@ -141,6 +143,7 @@ class TestYouTube(TestCase):
             patch(
                 "youtube.youtube.__youtube_subs_response_to_channels"
             ) as mock_transform,
+            patch("youtube.youtube.check_rss_for_new_videos", return_value=[]),
         ):
             mock_transform.return_value = (["c1", "c2"], ["recent_obj"])
             channels, recently = pull_my_subscriptions(self.mock_youtube)
@@ -568,3 +571,164 @@ class TestYouTube(TestCase):
         result = list(_chunk_list(test_list))
 
         assert len(result) == 0
+
+
+class TestCheckRssForNewVideos(TestCase):
+    def setUp(self):
+        self.channel_a = MagicMock()
+        self.channel_a.id = "UCaaaaaaaaaaaaaaaaaaaaaaaa"
+        self.channel_a.name = "Channel A"
+
+        self.channel_b = MagicMock()
+        self.channel_b.id = "UCbbbbbbbbbbbbbbbbbbbbbbbb"
+        self.channel_b.name = "Channel B"
+
+    # ------------------------------------------------------------------ helpers
+
+    def _make_atom_feed(self, video_id: str, published: str) -> bytes:
+        """Build a minimal YouTube Atom feed with one entry."""
+        return (
+            f'<?xml version="1.0" encoding="UTF-8"?>'
+            f'<feed xmlns="http://www.w3.org/2005/Atom"'
+            f'      xmlns:yt="http://www.youtube.com/xml/schemas/2015">'
+            f"  <entry>"
+            f"    <yt:videoId>{video_id}</yt:videoId>"
+            f"    <published>{published}</published>"
+            f"  </entry>"
+            f"</feed>"
+        ).encode()
+
+    def _make_session_cm(self, existing_video=None):
+        """Return a mock Session context manager for DB look-ups."""
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.return_value = (
+            existing_video
+        )
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+        return mock_session_cm
+
+    # ------------------------------------------------------------------ tests
+
+    def test_returns_empty_when_no_channels(self):
+        """Empty channel list returns [] without making any requests."""
+        result = check_rss_for_new_videos([])
+        assert result == []
+
+    def test_returns_channel_with_new_video(self):
+        """Channel with a brand-new video (not in DB, published recently) is returned."""
+        now = datetime.now(timezone.utc)
+        published = (now - timedelta(seconds=5)).isoformat()
+        feed_bytes = self._make_atom_feed("vid_new", published)
+
+        mock_session_cm = self._make_session_cm(existing_video=None)
+
+        with (
+            patch(
+                "youtube.youtube._fetch_all_rss_feeds",
+                new_callable=AsyncMock,
+                return_value=[(self.channel_a, feed_bytes)],
+            ),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch("youtube.youtube.select"),
+            patch(
+                "youtube.youtube.calculate_interval_between_cycles", return_value=9
+            ),
+        ):
+            result = check_rss_for_new_videos([self.channel_a])
+
+        assert result == [self.channel_a]
+
+    def test_skips_channel_when_video_already_in_db(self):
+        """Channel whose most recent RSS video is already in DB is NOT returned."""
+        now = datetime.now(timezone.utc)
+        published = (now - timedelta(seconds=5)).isoformat()
+        feed_bytes = self._make_atom_feed("vid_existing", published)
+
+        existing_video = MagicMock()
+        mock_session_cm = self._make_session_cm(existing_video=existing_video)
+
+        with (
+            patch(
+                "youtube.youtube._fetch_all_rss_feeds",
+                new_callable=AsyncMock,
+                return_value=[(self.channel_a, feed_bytes)],
+            ),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch("youtube.youtube.select"),
+            patch(
+                "youtube.youtube.calculate_interval_between_cycles", return_value=9
+            ),
+        ):
+            result = check_rss_for_new_videos([self.channel_a])
+
+        assert result == []
+
+    def test_skips_channel_when_video_too_old(self):
+        """Channel whose most recent RSS video is older than 3 cycles is NOT returned."""
+        now = datetime.now(timezone.utc)
+        # 10 minutes ago is well beyond 3 × 9s = 27s
+        published = (now - timedelta(minutes=10)).isoformat()
+        feed_bytes = self._make_atom_feed("vid_old", published)
+
+        with (
+            patch(
+                "youtube.youtube._fetch_all_rss_feeds",
+                new_callable=AsyncMock,
+                return_value=[(self.channel_a, feed_bytes)],
+            ),
+            patch(
+                "youtube.youtube.calculate_interval_between_cycles", return_value=9
+            ),
+        ):
+            result = check_rss_for_new_videos([self.channel_a])
+
+        assert result == []
+
+    def test_skips_channel_on_rss_fetch_error(self):
+        """A None payload (fetch error) for a channel is handled gracefully."""
+        with (
+            patch(
+                "youtube.youtube._fetch_all_rss_feeds",
+                new_callable=AsyncMock,
+                return_value=[(self.channel_a, None)],
+            ),
+            patch(
+                "youtube.youtube.calculate_interval_between_cycles", return_value=9
+            ),
+        ):
+            result = check_rss_for_new_videos([self.channel_a])
+
+        assert result == []
+
+    def test_all_channels_passed_to_fetch(self):
+        """All channels are forwarded to _fetch_all_rss_feeds in a single call."""
+        now = datetime.now(timezone.utc)
+        published = (now - timedelta(seconds=5)).isoformat()
+        feed_a = self._make_atom_feed("vid_a", published)
+        feed_b = self._make_atom_feed("vid_b", published)
+
+        mock_session_cm = self._make_session_cm(existing_video=None)
+
+        fetch_mock = AsyncMock(
+            return_value=[
+                (self.channel_a, feed_a),
+                (self.channel_b, feed_b),
+            ]
+        )
+
+        with (
+            patch("youtube.youtube._fetch_all_rss_feeds", fetch_mock),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch("youtube.youtube.select"),
+            patch(
+                "youtube.youtube.calculate_interval_between_cycles", return_value=9
+            ),
+        ):
+            result = check_rss_for_new_videos([self.channel_a, self.channel_b])
+
+        # Both channels were passed in a single call
+        fetch_mock.assert_called_once_with([self.channel_a, self.channel_b])
+        assert result == [self.channel_a, self.channel_b]
+
