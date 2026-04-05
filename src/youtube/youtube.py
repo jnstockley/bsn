@@ -1,6 +1,9 @@
+import asyncio
 import math
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
+import aiohttp
 import pytz
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
@@ -29,6 +32,11 @@ def pull_my_subscriptions(youtube: Resource):
     response = __make_request(request)
 
     channels, recently_uploaded_channels = __youtube_subs_response_to_channels(response)
+
+    remaining_channels = [
+        channel for channel in channels if channel not in recently_uploaded_channels
+    ]
+    recently_uploaded_channels += check_rss_for_new_videos(remaining_channels)
 
     return channels, recently_uploaded_channels
 
@@ -125,6 +133,116 @@ def get_recent_videos(
         videos.append(video)
 
     return videos
+
+
+async def _fetch_rss_feed(
+    session: aiohttp.ClientSession, channel: YoutubeChannel
+) -> tuple[YoutubeChannel, bytes | None]:
+    """Fetch the RSS feed for a single channel asynchronously.
+
+    Returns ``(channel, content)`` on success or ``(channel, None)`` on error.
+    """
+    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel.id}"
+    try:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            return channel, await resp.read()
+    except Exception as e:
+        logger.warning(f"Error fetching RSS feed for channel {channel.name}: {e}")
+        return channel, None
+
+
+async def _fetch_all_rss_feeds(
+    channels: list[YoutubeChannel],
+) -> list[tuple[YoutubeChannel, bytes | None]]:
+    """Concurrently fetch RSS feeds for all given channels."""
+    async with aiohttp.ClientSession() as session:
+        tasks = [_fetch_rss_feed(session, channel) for channel in channels]
+        return await asyncio.gather(*tasks)
+
+
+def check_rss_for_new_videos(
+    channels: list[YoutubeChannel],
+) -> list[YoutubeChannel]:
+    """Check YouTube RSS feeds for channels not already detected as having new videos.
+
+    Note: YouTube RSS feeds are per-channel — each feed URL covers exactly one channel
+    and returns up to 15 of the most recent videos. All feeds are fetched concurrently.
+
+    Returns a list of channels where their most recent video:
+    - is NOT already present in our DB, AND
+    - was published within 3 check cycles (recent enough to warrant a notification).
+    """
+    _ATOM_NS = "http://www.w3.org/2005/Atom"
+    _YT_NS = "http://www.youtube.com/xml/schemas/2015"
+
+    if not channels:
+        return []
+
+    interval_between_cycles = calculate_interval_between_cycles() * 3
+    now = datetime.now().astimezone()
+
+    # Fetch all RSS feeds concurrently
+    feed_results: list[tuple[YoutubeChannel, bytes | None]] = asyncio.run(
+        _fetch_all_rss_feeds(channels)
+    )
+
+    channels_with_new_videos: list[YoutubeChannel] = []
+
+    for channel, feed_content in feed_results:
+        if feed_content is None:
+            continue
+
+        root = ET.fromstring(feed_content)
+        entries = root.findall(f"{{{_ATOM_NS}}}entry")
+
+        if not entries:
+            logger.debug(f"No entries found in RSS feed for channel {channel.name}")
+            continue
+
+        # The first entry is the most recently published video
+        entry = entries[0]
+
+        video_id_el = entry.find(f"{{{_YT_NS}}}videoId")
+        published_el = entry.find(f"{{{_ATOM_NS}}}published")
+
+        if (
+            video_id_el is None
+            or published_el is None
+            or not video_id_el.text
+            or not published_el.text
+        ):
+            logger.warning(f"Could not parse RSS entry for channel {channel.name}")
+            continue
+
+        video_id = video_id_el.text
+        published_time = datetime.fromisoformat(published_el.text).astimezone()
+
+        # Skip if the video is older than 3 check cycles
+        if (now - published_time).total_seconds() > interval_between_cycles:
+            logger.debug(
+                f"Skipping channel {channel.name}: most recent video was published "
+                f"more than {interval_between_cycles}s ago"
+            )
+            continue
+
+        # Skip if the video is already in our DB
+        with Session(engine) as s:
+            stmt = select(YoutubeVideo).where(YoutubeVideo.id == video_id)
+            existing_video = s.execute(stmt).scalar_one_or_none()
+
+        if existing_video:
+            logger.debug(
+                f"Most recent video from channel {channel.name} is already in DB, skipping"
+            )
+            continue
+
+        logger.info(
+            f"Channel {channel.name} has a new video not yet in DB (detected via RSS)"
+        )
+        channels_with_new_videos.append(channel)
+
+    return channels_with_new_videos
 
 
 def __youtube_subs_response_to_channels(
