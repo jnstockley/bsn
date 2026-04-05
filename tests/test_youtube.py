@@ -632,9 +632,7 @@ class TestCheckRssForNewVideos(TestCase):
             ),
             patch("youtube.youtube.Session", return_value=mock_session_cm),
             patch("youtube.youtube.select"),
-            patch(
-                "youtube.youtube.calculate_interval_between_cycles", return_value=9
-            ),
+            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
         ):
             result = check_rss_for_new_videos([self.channel_a])
 
@@ -657,9 +655,7 @@ class TestCheckRssForNewVideos(TestCase):
             ),
             patch("youtube.youtube.Session", return_value=mock_session_cm),
             patch("youtube.youtube.select"),
-            patch(
-                "youtube.youtube.calculate_interval_between_cycles", return_value=9
-            ),
+            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
         ):
             result = check_rss_for_new_videos([self.channel_a])
 
@@ -678,9 +674,7 @@ class TestCheckRssForNewVideos(TestCase):
                 new_callable=AsyncMock,
                 return_value=[(self.channel_a, feed_bytes)],
             ),
-            patch(
-                "youtube.youtube.calculate_interval_between_cycles", return_value=9
-            ),
+            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
         ):
             result = check_rss_for_new_videos([self.channel_a])
 
@@ -694,9 +688,7 @@ class TestCheckRssForNewVideos(TestCase):
                 new_callable=AsyncMock,
                 return_value=[(self.channel_a, None)],
             ),
-            patch(
-                "youtube.youtube.calculate_interval_between_cycles", return_value=9
-            ),
+            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
         ):
             result = check_rss_for_new_videos([self.channel_a])
 
@@ -722,13 +714,10 @@ class TestCheckRssForNewVideos(TestCase):
             patch("youtube.youtube._fetch_all_rss_feeds", fetch_mock),
             patch("youtube.youtube.Session", return_value=mock_session_cm),
             patch("youtube.youtube.select"),
-            patch(
-                "youtube.youtube.calculate_interval_between_cycles", return_value=9
-            ),
+            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
         ):
             result = check_rss_for_new_videos([self.channel_a, self.channel_b])
 
         # Both channels were passed in a single call
         fetch_mock.assert_called_once_with([self.channel_a, self.channel_b])
         assert result == [self.channel_a, self.channel_b]
-

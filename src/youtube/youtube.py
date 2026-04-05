@@ -33,7 +33,9 @@ def pull_my_subscriptions(youtube: Resource):
 
     channels, recently_uploaded_channels = __youtube_subs_response_to_channels(response)
 
-    remaining_channels = [channel for channel in channels if channel not in recently_uploaded_channels]
+    remaining_channels = [
+        channel for channel in channels if channel not in recently_uploaded_channels
+    ]
     recently_uploaded_channels += check_rss_for_new_videos(remaining_channels)
 
     return channels, recently_uploaded_channels
