@@ -205,6 +205,7 @@ def check_rss_for_new_videos(
 
         video_id_el = entry.find(f"{{{_YT_NS}}}videoId")
         published_el = entry.find(f"{{{_ATOM_NS}}}published")
+        updated_el = entry.find(f"{{{_ATOM_NS}}}updated")
 
         if (
             video_id_el is None
@@ -217,11 +218,19 @@ def check_rss_for_new_videos(
 
         video_id = video_id_el.text
         published_time = datetime.fromisoformat(published_el.text).astimezone()
+        updated_time = (
+            datetime.fromisoformat(updated_el.text).astimezone()
+            if updated_el is not None and updated_el.text
+            else None
+        )
+
+        # Use the most recent of published/updated for the recency check
+        latest_time = max(t for t in (published_time, updated_time) if t is not None)
 
         # Skip if the video is older than 3 check cycles
-        if (now - published_time).total_seconds() > interval_between_cycles:
+        if (now - latest_time).total_seconds() > interval_between_cycles:
             logger.debug(
-                f"Skipping channel {channel.name}: most recent video was published "
+                f"Skipping channel {channel.name}: most recent video was published/updated "
                 f"more than {interval_between_cycles}s ago"
             )
             continue
