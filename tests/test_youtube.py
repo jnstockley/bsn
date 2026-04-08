@@ -211,20 +211,19 @@ class TestYouTube(TestCase):
         mock_session = MagicMock()
         scalar_side_effects = [
             quota_check_policy,  # 1: check quota – policy
-            quota_check_usage,   # 2: check quota – usage
-            quota_inc_policy,    # 3: increment (main request) – policy
-            quota_inc_usage,     # 4: increment (main request) – usage
-            None,                # 5: channel name update – channel not found
-            quota_inc_policy,    # 6: increment (__is_short) – policy
-            quota_inc_usage,     # 7: increment (__is_short) – usage
-            quota_inc_policy,    # 8: increment (__is_live)  – policy
-            quota_inc_usage,     # 9: increment (__is_live)  – usage
-            None,                # 10: existing video check → not in DB
+            quota_check_usage,  # 2: check quota – usage
+            quota_inc_policy,  # 3: increment (main request) – policy
+            quota_inc_usage,  # 4: increment (main request) – usage
+            None,  # 5: channel name update – channel not found
+            quota_inc_policy,  # 6: increment (__is_short) – policy
+            quota_inc_usage,  # 7: increment (__is_short) – usage
+            quota_inc_policy,  # 8: increment (__is_live)  – policy
+            quota_inc_usage,  # 9: increment (__is_live)  – usage
+            None,  # 10: existing video check → not in DB
         ]
         mock_session.execute.return_value.scalar_one_or_none.side_effect = (
             scalar_side_effects
         )
-
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
@@ -354,15 +353,15 @@ class TestYouTube(TestCase):
         mock_session = MagicMock()
         mock_session.execute.return_value.scalar_one_or_none.side_effect = [
             quota_check_policy,  # 1: check quota – policy
-            quota_check_usage,   # 2: check quota – usage
-            quota_inc_policy,    # 3: increment (main request) – policy
-            quota_inc_usage,     # 4: increment (main request) – usage
-            None,                # 5: channel name update – channel not found
-            quota_inc_policy,    # 6: increment (__is_short) – policy
-            quota_inc_usage,     # 7: increment (__is_short) – usage
-            quota_inc_policy,    # 8: increment (__is_live)  – policy
-            quota_inc_usage,     # 9: increment (__is_live)  – usage
-            existing_video,      # 10: existing video found → skip
+            quota_check_usage,  # 2: check quota – usage
+            quota_inc_policy,  # 3: increment (main request) – policy
+            quota_inc_usage,  # 4: increment (main request) – usage
+            None,  # 5: channel name update – channel not found
+            quota_inc_policy,  # 6: increment (__is_short) – policy
+            quota_inc_usage,  # 7: increment (__is_short) – usage
+            quota_inc_policy,  # 8: increment (__is_live)  – policy
+            quota_inc_usage,  # 9: increment (__is_live)  – usage
+            existing_video,  # 10: existing video found → skip
         ]
 
         mock_session_cm = MagicMock()
@@ -430,15 +429,15 @@ class TestYouTube(TestCase):
         mock_session = MagicMock()
         mock_session.execute.return_value.scalar_one_or_none.side_effect = [
             quota_check_policy,  # 1: check quota – policy
-            quota_check_usage,   # 2: check quota – usage
-            quota_inc_policy,    # 3: increment (main request) – policy
-            quota_inc_usage,     # 4: increment (main request) – usage
-            None,                # 5: channel name update – channel not found
-            quota_inc_policy,    # 6: increment (__is_short) – policy
-            quota_inc_usage,     # 7: increment (__is_short) – usage
-            quota_inc_policy,    # 8: increment (__is_live)  – policy
-            quota_inc_usage,     # 9: increment (__is_live)  – usage
-            None,                # 10: existing video check → not in DB, so it gets saved
+            quota_check_usage,  # 2: check quota – usage
+            quota_inc_policy,  # 3: increment (main request) – policy
+            quota_inc_usage,  # 4: increment (main request) – usage
+            None,  # 5: channel name update – channel not found
+            quota_inc_policy,  # 6: increment (__is_short) – policy
+            quota_inc_usage,  # 7: increment (__is_short) – usage
+            quota_inc_policy,  # 8: increment (__is_live)  – policy
+            quota_inc_usage,  # 9: increment (__is_live)  – usage
+            None,  # 10: existing video check → not in DB, so it gets saved
         ]
 
         mock_session_cm = MagicMock()
