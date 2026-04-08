@@ -69,6 +69,16 @@ def get_recent_videos(
 
         body: dict = response["items"][0]
 
+        # Update Channel Name, reference #293
+        channel_name = body["snippet"]["channelTitle"]
+        with Session(engine) as s:
+            stmt = select(YoutubeChannel).where(YoutubeChannel.id == channel_id)
+            channel: YoutubeChannel | None = s.execute(stmt).scalar_one_or_none()
+            if channel:
+                channel.name = channel_name
+                s.commit()
+                s.refresh(channel)
+
         if body["status"]["privacyStatus"] != "public":
             logger.info(
                 f"Skipping video {body['snippet']['title']} from channel {channel_id} because it is not public"
@@ -289,7 +299,6 @@ def __youtube_subs_response_to_channels(
                     )
 
                 channel.num_videos = current_num_videos
-                channel.name = c["snippet"]["title"]
                 s.flush()
                 s.commit()
                 s.refresh(channel)
