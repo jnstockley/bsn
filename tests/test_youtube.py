@@ -174,6 +174,7 @@ class TestYouTube(TestCase):
                         "title": "Test Video",
                         "thumbnails": {"high": {"url": "https://img"}},
                         "channelId": mock_channel.id,
+                        "channelTitle": "Test Channel",
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -189,15 +190,15 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        # The new logic makes these Session/DB calls per channel:
+        # Session/DB call order per channel:
         #   1. __check_available_quota  → policy + usage (scalar_one_or_none x2)
         #   2. __increment_quota_usage  → policy + usage (scalar_one_or_none x2)
-        #   3. DB session for existing-video check → scalar_one_or_none → None
+        #   3. channel name update      → channel lookup  (scalar_one_or_none x1)
+        #   4. __is_short increment     → policy + usage  (scalar_one_or_none x2)
+        #   5. __is_live  increment     → policy + usage  (scalar_one_or_none x2)
+        #   6. existing-video check     → scalar_one_or_none → None
         #      then delete + add (no scalar_one_or_none)
-        #   4. calculate_interval_between_cycles → scalars().all()
-        #
-        # We use a single shared session whose scalar_one_or_none side-effects
-        # cover calls 1-3, and override execute() for call 4.
+        #   7. calculate_interval_between_cycles → scalars().all() (no scalar_one_or_none)
 
         quota_check_policy = MagicMock()
         quota_check_usage = MagicMock()
@@ -207,40 +208,23 @@ class TestYouTube(TestCase):
         quota_inc_usage = MagicMock()
         quota_inc_usage.quota_remaining = 9999
 
-        # calculate_interval_between_cycles: returns a channel list
-        calc_channels_result = MagicMock()
-        calc_channels_result.scalars.return_value.all.return_value = [MagicMock()]
-
         mock_session = MagicMock()
         scalar_side_effects = [
-            quota_check_policy,
-            quota_check_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            None,  # existing video check → not in DB
+            quota_check_policy,  # 1: check quota – policy
+            quota_check_usage,   # 2: check quota – usage
+            quota_inc_policy,    # 3: increment (main request) – policy
+            quota_inc_usage,     # 4: increment (main request) – usage
+            None,                # 5: channel name update – channel not found
+            quota_inc_policy,    # 6: increment (__is_short) – policy
+            quota_inc_usage,     # 7: increment (__is_short) – usage
+            quota_inc_policy,    # 8: increment (__is_live)  – policy
+            quota_inc_usage,     # 9: increment (__is_live)  – usage
+            None,                # 10: existing video check → not in DB
         ]
         mock_session.execute.return_value.scalar_one_or_none.side_effect = (
             scalar_side_effects
         )
 
-        # Override execute for the 6th call (calculate_interval_between_cycles)
-        original_execute = mock_session.execute
-        call_count = [0]
-
-        def smart_execute(stmt):
-            call_count[0] += 1
-            # The calculate_interval_between_cycles() call happens after several
-            # quota-related DB calls; ensure we return the mocked channel list on
-            # the 10th execute call which corresponds to that query in these tests.
-            if call_count[0] == 10:
-                return calc_channels_result
-            return original_execute(stmt)
-
-        mock_session.execute = smart_execute
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
@@ -282,7 +266,7 @@ class TestYouTube(TestCase):
         mock_response = {
             "items": [
                 {
-                    "snippet": {"title": "Test Video"},
+                    "snippet": {"title": "Test Video", "channelTitle": "Test Channel"},
                     "status": {"privacyStatus": "private"},
                     "contentDetails": {
                         "videoPublishedAt": published_at,
@@ -296,8 +280,26 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        # Private video still triggers 1 __increment_quota_usage (request was made).
-        _, mock_session_cm = self._make_quota_session_cm(increment_calls=1)
+        # Private video: __check_available_quota (policy+usage), __increment_quota_usage
+        # (policy+usage), channel name update lookup (1), then privacy check → continue.
+        quota_check_policy = MagicMock()
+        quota_check_usage = MagicMock()
+        quota_check_usage.quota_remaining = 9999
+        quota_inc_policy = MagicMock()
+        quota_inc_usage = MagicMock()
+        quota_inc_usage.quota_remaining = 9999
+
+        mock_session = MagicMock()
+        mock_session.execute.return_value.scalar_one_or_none.side_effect = [
+            quota_check_policy,
+            quota_check_usage,
+            quota_inc_policy,
+            quota_inc_usage,
+            None,  # channel name update → channel not found
+        ]
+        mock_session_cm = MagicMock()
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
 
         with patch("youtube.youtube.Session", return_value=mock_session_cm):
             videos = get_recent_videos([mock_channel], self.mock_youtube)
@@ -323,6 +325,7 @@ class TestYouTube(TestCase):
                         "title": "Test Video",
                         "thumbnails": {"high": {"url": "https://img"}},
                         "channelId": mock_channel.id,
+                        "channelTitle": "Test Channel",
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -338,7 +341,8 @@ class TestYouTube(TestCase):
         mock_request.execute.return_value = mock_response
         self.mock_youtube.playlistItems().list.return_value = mock_request
 
-        # quota check + quota increment (2 reads each), then existing video check → existing
+        # quota check + quota increment (2 reads each), channel name update (1),
+        # is_short/is_live increments (2 reads each), then existing video check → existing
         quota_check_policy = MagicMock()
         quota_check_usage = MagicMock()
         quota_check_usage.quota_remaining = 9999
@@ -349,15 +353,16 @@ class TestYouTube(TestCase):
 
         mock_session = MagicMock()
         mock_session.execute.return_value.scalar_one_or_none.side_effect = [
-            quota_check_policy,
-            quota_check_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            existing_video,  # existing video found → skip
+            quota_check_policy,  # 1: check quota – policy
+            quota_check_usage,   # 2: check quota – usage
+            quota_inc_policy,    # 3: increment (main request) – policy
+            quota_inc_usage,     # 4: increment (main request) – usage
+            None,                # 5: channel name update – channel not found
+            quota_inc_policy,    # 6: increment (__is_short) – policy
+            quota_inc_usage,     # 7: increment (__is_short) – usage
+            quota_inc_policy,    # 8: increment (__is_live)  – policy
+            quota_inc_usage,     # 9: increment (__is_live)  – usage
+            existing_video,      # 10: existing video found → skip
         ]
 
         mock_session_cm = MagicMock()
@@ -399,6 +404,7 @@ class TestYouTube(TestCase):
                         "title": "Old Video",
                         "thumbnails": {"high": {"url": "https://img"}},
                         "channelId": mock_channel.id,
+                        "channelTitle": "Test Channel",
                     },
                     "status": {"privacyStatus": "public"},
                     "contentDetails": {
@@ -421,32 +427,19 @@ class TestYouTube(TestCase):
         quota_inc_usage = MagicMock()
         quota_inc_usage.quota_remaining = 9999
 
-        calc_channels_result = MagicMock()
-        calc_channels_result.scalars.return_value.all.return_value = [MagicMock()]
-
         mock_session = MagicMock()
         mock_session.execute.return_value.scalar_one_or_none.side_effect = [
-            quota_check_policy,
-            quota_check_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            quota_inc_policy,
-            quota_inc_usage,
-            None,  # existing video check → not in DB, so it gets saved
+            quota_check_policy,  # 1: check quota – policy
+            quota_check_usage,   # 2: check quota – usage
+            quota_inc_policy,    # 3: increment (main request) – policy
+            quota_inc_usage,     # 4: increment (main request) – usage
+            None,                # 5: channel name update – channel not found
+            quota_inc_policy,    # 6: increment (__is_short) – policy
+            quota_inc_usage,     # 7: increment (__is_short) – usage
+            quota_inc_policy,    # 8: increment (__is_live)  – policy
+            quota_inc_usage,     # 9: increment (__is_live)  – usage
+            None,                # 10: existing video check → not in DB, so it gets saved
         ]
-
-        original_execute = mock_session.execute
-        call_count = [0]
-
-        def smart_execute(stmt):
-            call_count[0] += 1
-            if call_count[0] == 10:
-                return calc_channels_result
-            return original_execute(stmt)
-
-        mock_session.execute = smart_execute
 
         mock_session_cm = MagicMock()
         mock_session_cm.__enter__.return_value = mock_session
