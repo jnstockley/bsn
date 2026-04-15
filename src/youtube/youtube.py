@@ -330,7 +330,7 @@ def __is_live(body: dict, youtube: Resource) -> bool:
 
     body = response["items"][0]
 
-    return 'liveStreamingDetails' in body
+    return "liveStreamingDetails" in body
 
 
 def __make_request(request, units_used: int = 1) -> dict:
