@@ -653,12 +653,17 @@ class TestCheckRssForNewVideos(TestCase):
 
         assert result == []
 
-    def test_skips_channel_when_video_too_old(self):
-        """Channel whose most recent RSS video is older than 3 cycles is NOT returned."""
+    def test_channel_returned_even_when_video_is_old(self):
+        """Channel whose most recent RSS video is old but not in DB is still returned.
+
+        Age-based filtering has been intentionally removed from check_rss_for_new_videos;
+        only the DB existence check determines whether a channel is included.
+        """
         now = datetime.now(timezone.utc)
-        # 10 minutes ago is well beyond 3 × 9s = 27s
         published = (now - timedelta(minutes=10)).isoformat()
         feed_bytes = self._make_atom_feed("vid_old", published)
+
+        mock_session_cm = self._make_session_cm(existing_video=None)
 
         with (
             patch(
@@ -666,11 +671,12 @@ class TestCheckRssForNewVideos(TestCase):
                 new_callable=AsyncMock,
                 return_value=[(self.channel_a, feed_bytes)],
             ),
-            patch("youtube.youtube.calculate_interval_between_cycles", return_value=9),
+            patch("youtube.youtube.Session", return_value=mock_session_cm),
+            patch("youtube.youtube.select"),
         ):
             result = check_rss_for_new_videos([self.channel_a])
 
-        assert result == []
+        assert result == [self.channel_a]
 
     def test_skips_channel_on_rss_fetch_error(self):
         """A None payload (fetch error) for a channel is handled gracefully."""

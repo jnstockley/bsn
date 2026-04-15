@@ -92,14 +92,18 @@ def get_recent_videos(
         utc_time = utc_time.replace(tzinfo=timezone.utc)
         local_time = utc_time.astimezone()
 
+        is_live: bool = __is_live(body, youtube)
+
         video = YoutubeVideo(
             id=body["contentDetails"]["videoId"],
             title=body["snippet"]["title"],
             url=f"https://www.youtube.com/watch?v={body['contentDetails']['videoId']}",
             thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
             is_short=__is_short(body, youtube),
-            is_livestream=__is_live(body, youtube),
-            uploaded_at=local_time,
+            is_livestream=is_live,
+            uploaded_at=datetime.now(tz=timezone.utc).astimezone()
+            if is_live
+            else local_time,
             youtube_channel_id=channel_id,
         )
 
@@ -125,18 +129,20 @@ def get_recent_videos(
             _ = video.youtube_channel
             s.expunge(video)
             logger.debug(
-                "Added video to database and detached from session: {video.title} from channel {video.youtube_channel.name}"
+                f"Added video to database and detached from session: {video.title} from channel {video.youtube_channel.name}"
             )
 
-        interval_between_cycles = (
-            calculate_interval_between_cycles() * 3
-        )  # Multiply by 3 to add some buffer time in case the check runs a bit later than scheduled
-        now = datetime.now().astimezone()
-        if (now - local_time).total_seconds() > interval_between_cycles:
-            logger.warning(
-                f"Skipping video {body['snippet']['title']} from channel {channel_id} because it was uploaded more than {interval_between_cycles} seconds ago"
-            )
-            continue
+        # Skip check since livestream published/updated times are inconsistent
+        if not is_live:
+            interval_between_cycles = (
+                calculate_interval_between_cycles() * 3
+            )  # Multiply by 3 to add some buffer time in case the check runs a bit later than scheduled
+            now = datetime.now().astimezone()
+            if (now - local_time).total_seconds() > interval_between_cycles:
+                logger.warning(
+                    f"Skipping video {body['snippet']['title']} from channel {channel_id} because it was uploaded more than {interval_between_cycles} seconds ago"
+                )
+                continue
 
         logger.info(f"Found new video: {video}")
 
@@ -189,9 +195,6 @@ def check_rss_for_new_videos(
     if not channels:
         return []
 
-    interval_between_cycles = calculate_interval_between_cycles() * 3
-    now = datetime.now().astimezone()
-
     # Fetch all RSS feeds concurrently
     feed_results: list[tuple[YoutubeChannel, bytes | None]] = asyncio.run(
         _fetch_all_rss_feeds(channels)
@@ -214,36 +217,12 @@ def check_rss_for_new_videos(
         entry = entries[0]
 
         video_id_el = entry.find(f"{{{_YT_NS}}}videoId")
-        published_el = entry.find(f"{{{_ATOM_NS}}}published")
-        updated_el = entry.find(f"{{{_ATOM_NS}}}updated")
 
-        if (
-            video_id_el is None
-            or published_el is None
-            or not video_id_el.text
-            or not published_el.text
-        ):
+        if video_id_el is None or not video_id_el.text:
             logger.warning(f"Could not parse RSS entry for channel {channel.name}")
             continue
 
         video_id = video_id_el.text
-        published_time = datetime.fromisoformat(published_el.text).astimezone()
-        updated_time = (
-            datetime.fromisoformat(updated_el.text).astimezone()
-            if updated_el is not None and updated_el.text
-            else None
-        )
-
-        # Use the most recent of published/updated for the recency check
-        latest_time = max(t for t in (published_time, updated_time) if t is not None)
-
-        # Skip if the video is older than 3 check cycles
-        if (now - latest_time).total_seconds() > interval_between_cycles:
-            logger.debug(
-                f"Skipping channel {channel.name}: most recent video was published/updated "
-                f"more than {interval_between_cycles}s ago"
-            )
-            continue
 
         # Skip if the video is already in our DB
         with Session(engine) as s:
