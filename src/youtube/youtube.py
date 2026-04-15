@@ -330,9 +330,7 @@ def __is_live(body: dict, youtube: Resource) -> bool:
 
     body = response["items"][0]
 
-    if "liveBroadcastContent" in body["snippet"]:
-        return body["snippet"]["liveBroadcastContent"] == "live"
-    return False
+    return 'liveStreamingDetails' in body
 
 
 def __make_request(request, units_used: int = 1) -> dict:
