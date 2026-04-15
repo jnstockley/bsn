@@ -101,7 +101,9 @@ def get_recent_videos(
             thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
             is_short=__is_short(body, youtube),
             is_livestream=is_live,
-            uploaded_at=datetime.now(tz=timezone.utc).astimezone() if is_live else local_time,
+            uploaded_at=datetime.now(tz=timezone.utc).astimezone()
+            if is_live
+            else local_time,
             youtube_channel_id=channel_id,
         )
 
@@ -193,9 +195,6 @@ def check_rss_for_new_videos(
     if not channels:
         return []
 
-    interval_between_cycles = calculate_interval_between_cycles() * 3
-    now = datetime.now().astimezone()
-
     # Fetch all RSS feeds concurrently
     feed_results: list[tuple[YoutubeChannel, bytes | None]] = asyncio.run(
         _fetch_all_rss_feeds(channels)
@@ -219,10 +218,7 @@ def check_rss_for_new_videos(
 
         video_id_el = entry.find(f"{{{_YT_NS}}}videoId")
 
-        if (
-            video_id_el is None
-            or not video_id_el.text
-        ):
+        if video_id_el is None or not video_id_el.text:
             logger.warning(f"Could not parse RSS entry for channel {channel.name}")
             continue
 
