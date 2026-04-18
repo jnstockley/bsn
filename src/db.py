@@ -5,8 +5,6 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from models import Base
-
 load_dotenv()
 
 data_url = os.getenv("DATA_DIR", "./data")
@@ -22,5 +20,3 @@ else:
     if not data_dir.exists():
         data_dir.mkdir(parents=True, exist_ok=True)
     engine = create_engine(f"sqlite:///{data_url}/bsn.db")
-
-Base.metadata.create_all(engine)

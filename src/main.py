@@ -3,6 +3,8 @@ import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
+from alembic import command
+from alembic.config import Config
 
 from auth import oauth as oauth
 from notifications.notifications import send_upload_notification
@@ -20,6 +22,10 @@ from youtube.youtube import (
 
 def main():
     logger.info("Staring BSN...")
+
+    alembic_cfg = Config(Path(__file__).parent.parent / "alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+    logger.info("Database migrations applied.")
 
     oauth.get_authenticated_youtube_service()
 

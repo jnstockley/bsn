@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.14, <3.15"
 dependencies = [
     "aiohttp==3.13.5",
+    "alembic==1.18.4",
     "apprise==1.9.9",
+    "feedparser==6.0.12",
     "google-api-python-client==2.194.0",
     "python-dotenv==1.2.2",
     "pytz==2026.1.post1",
