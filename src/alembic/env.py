@@ -1,5 +1,5 @@
+import logging
 import os
-from logging.config import fileConfig
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from alembic import context
 
 from models import Base
+from util.logging import logger
 
 load_dotenv()
 
@@ -16,10 +17,14 @@ load_dotenv()
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# Route Alembic's own loggers through our existing logger's handlers/formatter
+for name in ("alembic", "alembic.runtime.migration", "sqlalchemy.engine"):
+    alembic_logger = logging.getLogger(name)
+    alembic_logger.handlers = []
+    for handler in logger.handlers:
+        alembic_logger.addHandler(handler)
+    alembic_logger.setLevel(logger.level)
+    alembic_logger.propagate = False
 
 # Build the database URL using the same logic as db.py
 data_url = os.getenv("DATA_DIR", "./data")
