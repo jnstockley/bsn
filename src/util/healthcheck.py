@@ -1,4 +1,7 @@
+import asyncio
+
 from auth import oauth as oauth
+from rss.rss import get_youtube_feed
 from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import __increment_quota_usage
@@ -21,6 +24,11 @@ def healthcheck() -> bool:
             or response["pageInfo"]["totalResults"] < 1
         ):
             raise Exception("Healthcheck channel not found.")
+
+        rss_response = asyncio.run(get_youtube_feed(f"UULF{example_channel_id[2:]}"))
+        if not rss_response:
+            raise Exception("Error getting RSS feed from YouTube.")
+
         logger.info("Healthcheck passed.")
         exit(0)
     except Exception as e:
