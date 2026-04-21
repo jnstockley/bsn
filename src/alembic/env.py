@@ -18,7 +18,7 @@ load_dotenv()
 config = context.config
 
 # Route Alembic's own loggers through our existing logger's handlers/formatter
-for name in ("alembic", "alembic.runtime.migration", "sqlalchemy.engine"):
+for name in ("alembic", "alembic.runtime.migration"):
     alembic_logger = logging.getLogger(name)
     alembic_logger.handlers = []
     for handler in logger.handlers:
