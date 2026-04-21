@@ -15,11 +15,15 @@ class YoutubeChannel(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
-    num_videos: Mapped[int] = mapped_column(nullable=False)
+    videos: Mapped[int] = mapped_column(nullable=True)
+    livestreams: Mapped[int] = mapped_column(nullable=True)
+    shorts: Mapped[int] = mapped_column(nullable=True)
     video: Mapped["YoutubeVideo"] = relationship(back_populates="youtube_channel")
+    livestream: Mapped["YoutubeLivestream"] = relationship(back_populates="youtube_channel")
+    short: Mapped["YoutubeShort"] = relationship(back_populates="youtube_channel")
 
     def __repr__(self):
-        return f"YoutubeChannel(name={self.name}, num_videos={self.num_videos})"
+        return f"YoutubeChannel(name={self.name}, num_videos={self.videos}), livestreams={self.livestreams}, shorts={self.shorts}"
 
 
 class YoutubeVideo(Base):
@@ -29,8 +33,6 @@ class YoutubeVideo(Base):
     title: Mapped[str] = mapped_column(nullable=False)
     url: Mapped[str] = mapped_column(nullable=False)
     thumbnail_url: Mapped[str] = mapped_column(nullable=False)
-    is_short: Mapped[bool] = mapped_column(nullable=False)
-    is_livestream: Mapped[bool] = mapped_column(nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(nullable=False)
     youtube_channel_id = mapped_column(ForeignKey("youtube_channel.id"))
 
@@ -39,6 +41,40 @@ class YoutubeVideo(Base):
     def __repr__(self):
         return f"YoutubeVideo(title={self.title}, url={self.url}, uploaded_at={self.uploaded_at}, uploaded_by={self.youtube_channel.name})"
 
+class YoutubeLivestream(Base):
+    __tablename__ = "youtube_livestream"
+
+    id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
+    title: Mapped[str] = mapped_column(nullable=False)
+    url: Mapped[str] = mapped_column(nullable=False)
+    thumbnail_url: Mapped[str] = mapped_column(nullable=False)
+    started_at: Mapped[datetime] = mapped_column(nullable=False)
+    youtube_channel_id = mapped_column(ForeignKey("youtube_channel.id"))
+
+    youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="livestream")
+
+    def __repr__(self):
+        return f"YoutubeVideo(title={self.title}, url={self.url}, started_at={self.started_at}, started_by={self.youtube_channel.name})"
+
+class YoutubeShort(Base):
+    __tablename__ = "youtube_short"
+
+    id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
+    title: Mapped[str] = mapped_column(nullable=False)
+    url: Mapped[str] = mapped_column(nullable=False)
+    thumbnail_url: Mapped[str] = mapped_column(nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(nullable=False)
+    youtube_channel_id = mapped_column(ForeignKey("youtube_channel.id"))
+
+    youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="short")
+
+    def __repr__(self):
+        return f"YoutubeVideo(title={self.title}, url={self.url}, uploaded_at={self.uploaded_at}, uploaded_by={self.youtube_channel.name})"
+
+class YoutubeContent:
+    video: YoutubeVideo
+    livestream: YoutubeLivestream
+    short: YoutubeShort
 
 class OauthCredential(Base):
     __tablename__ = "oauth_credential"
