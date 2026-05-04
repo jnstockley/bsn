@@ -15,6 +15,7 @@ jobs:
     permissions:  # NOTE: This workflow needs write permissions to create branches and pull requests: Repo Settings → Actions → General → Workflow permissions
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Checkout target repo
         uses: actions/checkout@v6
