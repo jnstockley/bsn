@@ -2,12 +2,12 @@ import os
 
 from apprise import apprise
 
-from models import YoutubeVideo
+from models import YoutubeContent
 from notifications import apprise_urls
 from util.logging import logger
 
 
-def send_upload_notification(videos: list[YoutubeVideo]):
+def send_upload_notification(videos: list[YoutubeContent]):
     allow_shorts = os.getenv("ALLOW_SHORTS", "true").lower() == "true"
     allow_livestreams = os.getenv("ALLOW_LIVE_STREAMS", "true").lower() == "true"
     appobj = apprise.Apprise()

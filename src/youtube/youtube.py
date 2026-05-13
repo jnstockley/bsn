@@ -1,19 +1,97 @@
 import asyncio
 import math
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 
 import aiohttp
 import pytz
+from feedparser import FeedParserDict
 from googleapiclient.discovery import Resource
-from googleapiclient.errors import HttpError
 
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import YoutubeChannel, YoutubeVideo, QuotaPolicy, Service, QuotaUsage
+from models import YoutubeChannel, QuotaPolicy, Service, QuotaUsage, YoutubeContent, YoutubeContentType
+from rss import rss
 from util.logging import logger
+from util.version import get_version
+
+def pull_subscriptions(youtube: Resource):
+    pass
+
+async def fetch_all_recent_content() -> list[YoutubeContent]:
+    with Session(engine) as s:
+        channels: list[YoutubeChannel] = s.execute(select(YoutubeChannel)).scalars().all()
+
+    version = get_version()
+    async with aiohttp.ClientSession(headers={"User-Agent": f"bsn/{version}"}) as session:
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(get_recent_content(channel, session)) for channel in channels]
+
+    results: list[YoutubeContent] = []
+    for task in tasks:
+        results.extend(task.result())
+
+    return results
+
+async def get_recent_content(channel: YoutubeChannel, session: aiohttp.ClientSession) -> list[YoutubeContent]:
+    video_playlist_id = f"UULF{channel.id[2:]}"
+    livestream_playlist_id = f"UULV{channel.id[2:]}"
+    short_playlist_id = f"UUSH{channel.id[2:]}"
+
+    async with asyncio.TaskGroup() as tg:
+        video_feed_promise = tg.create_task(rss.get_youtube_feed(video_playlist_id, session))
+        livestream_feed_promise = tg.create_task(rss.get_youtube_feed(livestream_playlist_id, session))
+        short_feed_promise = tg.create_task(rss.get_youtube_feed(short_playlist_id, session))
+
+    videos: list[YoutubeContent] = __process(video_feed_promise.result())
+    livestreams: list[YoutubeContent] = __process(livestream_feed_promise.result())
+    shorts: list[YoutubeContent] = __process(short_feed_promise.result())
+
+    return videos + livestreams + shorts
+
+def __process(feed: FeedParserDict) -> list[YoutubeContent]:
+    if not feed or "entries" not in feed or len(feed.entries) == 0:
+        return []
+
+    entries = feed["entries"]
+
+    content: list[YoutubeContent] = []
+
+    for entry in entries:
+        video_id = entry['yt_videoid']
+        channel_id = entry['yt_channelid']
+        title = entry['title']
+        uploaded_at = entry['published']
+        url = entry['link']
+        thumbnail_url = entry['media_thumbnail'][0]['url']
+        content_type = __get_content_type(entry['summary_detail']['base'])
+        if content_type:
+            content.append(YoutubeContent(
+                id=video_id,
+                title=title,
+                uploaded_at=uploaded_at,
+                url=url,
+                thumbnail_url=thumbnail_url,
+                type=content_type,
+                youtube_channel_id=channel_id,
+            ))
+
+    return content
+
+def __get_content_type(playlist_url: str) -> YoutubeContentType | None:
+    parsed_url = urlparse(playlist_url)
+    params = parse_qs(parsed_url.query)
+    if "playlist_id" in params:
+        playlist_id = params["playlist_id"][0]
+        if playlist_id.startswith("UULF"):
+            return YoutubeContentType.VIDEO
+        elif playlist_id.startswith("UULV"):
+            return YoutubeContentType.LIVESTREAM
+        elif playlist_id.startswith("UUSH"):
+            return YoutubeContentType.SHORT
+    return None
 
 
 def pull_my_subscriptions(youtube: Resource):
@@ -33,214 +111,7 @@ def pull_my_subscriptions(youtube: Resource):
 
     channels, recently_uploaded_channels = __youtube_subs_response_to_channels(response)
 
-    remaining_channels = [
-        channel for channel in channels if channel not in recently_uploaded_channels
-    ]
-    recently_uploaded_channels += check_rss_for_new_videos(remaining_channels)
-
     return channels, recently_uploaded_channels
-
-
-def get_recent_videos(
-    channels: list[YoutubeChannel], youtube: Resource
-) -> list[YoutubeVideo]:
-    if not __check_available_quota():
-        logger.warning(
-            "Quota for YouTube API has been exhausted. Skipping recent video check."
-        )
-        return []
-
-    playlist_ids = [f"UU{channel.id[2:]}" for channel in channels]
-
-    videos = []
-
-    for playlist_id in playlist_ids:
-        channel_id = f"UC{playlist_id[2:]}"
-        request = youtube.playlistItems().list(
-            part="snippet,status,contentDetails",
-            playlistId=playlist_id,
-            maxResults=1,
-        )
-
-        logger.debug(f"Making request {request.uri}")
-
-        response = request.execute()
-        __increment_quota_usage(1)
-
-        body: dict = response["items"][0]
-
-        # Update Channel Name, reference #293
-        channel_name = body["snippet"]["channelTitle"]
-        with Session(engine) as s:
-            stmt = select(YoutubeChannel).where(YoutubeChannel.id == channel_id)
-            channel: YoutubeChannel | None = s.execute(stmt).scalar_one_or_none()
-            if channel:
-                channel.name = channel_name
-                s.commit()
-                s.refresh(channel)
-
-        if body["status"]["privacyStatus"] != "public":
-            logger.info(
-                f"Skipping video {body['snippet']['title']} from channel {channel_id} because it is not public"
-            )
-            continue
-
-        # Parse ISO 8601 UTC timestamp and convert to local timezone
-        utc_time = datetime.strptime(
-            body["contentDetails"]["videoPublishedAt"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        utc_time = utc_time.replace(tzinfo=timezone.utc)
-        local_time = utc_time.astimezone()
-
-        is_live: bool = __is_live(body, youtube)
-
-        video = YoutubeVideo(
-            id=body["contentDetails"]["videoId"],
-            title=body["snippet"]["title"],
-            url=f"https://www.youtube.com/watch?v={body['contentDetails']['videoId']}",
-            thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
-            is_short=__is_short(body, youtube),
-            is_livestream=is_live,
-            uploaded_at=datetime.now(tz=timezone.utc).astimezone()
-            if is_live
-            else local_time,
-            youtube_channel_id=channel_id,
-        )
-
-        with Session(engine) as s:
-            stmt = select(YoutubeVideo).where(YoutubeVideo.id == video.id)
-            existing_video = s.execute(stmt).scalar_one_or_none()
-
-            if existing_video:
-                logger.warning(
-                    f"Skipping video {video.title} from channel {existing_video.youtube_channel.name} because it already exists in the database"
-                )
-                continue
-
-            stmt = delete(YoutubeVideo).where(
-                YoutubeVideo.youtube_channel_id == channel_id
-            )
-
-            s.execute(stmt)
-            s.add(video)
-            s.commit()
-            s.refresh(video)
-            # Eager load the youtube_channel relationship to prevent DetachedInstanceError
-            _ = video.youtube_channel
-            s.expunge(video)
-            logger.debug(
-                f"Added video to database and detached from session: {video.title} from channel {video.youtube_channel.name}"
-            )
-
-        # Skip check since livestream published/updated times are inconsistent
-        if not is_live:
-            interval_between_cycles = (
-                calculate_interval_between_cycles() * 3
-            )  # Multiply by 3 to add some buffer time in case the check runs a bit later than scheduled
-            now = datetime.now().astimezone()
-            if (now - local_time).total_seconds() > interval_between_cycles:
-                logger.warning(
-                    f"Skipping video {body['snippet']['title']} from channel {channel_id} because it was uploaded more than {interval_between_cycles} seconds ago"
-                )
-                continue
-
-        logger.info(f"Found new video: {video}")
-
-        videos.append(video)
-
-    return videos
-
-
-async def _fetch_rss_feed(
-    session: aiohttp.ClientSession, channel: YoutubeChannel
-) -> tuple[YoutubeChannel, bytes | None]:
-    """Fetch the RSS feed for a single channel asynchronously.
-
-    Returns ``(channel, content)`` on success or ``(channel, None)`` on error.
-    """
-    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel.id}"
-    try:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            return channel, await resp.read()
-    except Exception as e:
-        logger.warning(f"Error fetching RSS feed for channel {channel.name}: {e}")
-        return channel, None
-
-
-async def _fetch_all_rss_feeds(
-    channels: list[YoutubeChannel],
-) -> list[tuple[YoutubeChannel, bytes | None]]:
-    """Concurrently fetch RSS feeds for all given channels."""
-    async with aiohttp.ClientSession() as session:
-        tasks = [_fetch_rss_feed(session, channel) for channel in channels]
-        return await asyncio.gather(*tasks)
-
-
-def check_rss_for_new_videos(
-    channels: list[YoutubeChannel],
-) -> list[YoutubeChannel]:
-    """Check YouTube RSS feeds for channels not already detected as having new videos.
-
-    Note: YouTube RSS feeds are per-channel — each feed URL covers exactly one channel
-    and returns up to 15 of the most recent videos. All feeds are fetched concurrently.
-
-    Returns a list of channels where their most recent video:
-    - is NOT already present in our DB, AND
-    - was published within 3 check cycles (recent enough to warrant a notification).
-    """
-    _ATOM_NS = "http://www.w3.org/2005/Atom"
-    _YT_NS = "http://www.youtube.com/xml/schemas/2015"
-
-    if not channels:
-        return []
-
-    # Fetch all RSS feeds concurrently
-    feed_results: list[tuple[YoutubeChannel, bytes | None]] = asyncio.run(
-        _fetch_all_rss_feeds(channels)
-    )
-
-    channels_with_new_videos: list[YoutubeChannel] = []
-
-    for channel, feed_content in feed_results:
-        if feed_content is None:
-            continue
-
-        root = ET.fromstring(feed_content)
-        entries = root.findall(f"{{{_ATOM_NS}}}entry")
-
-        if not entries:
-            logger.debug(f"No entries found in RSS feed for channel {channel.name}")
-            continue
-
-        # The first entry is the most recently published video
-        entry = entries[0]
-
-        video_id_el = entry.find(f"{{{_YT_NS}}}videoId")
-
-        if video_id_el is None or not video_id_el.text:
-            logger.warning(f"Could not parse RSS entry for channel {channel.name}")
-            continue
-
-        video_id = video_id_el.text
-
-        # Skip if the video is already in our DB
-        with Session(engine) as s:
-            stmt = select(YoutubeVideo).where(YoutubeVideo.id == video_id)
-            existing_video = s.execute(stmt).scalar_one_or_none()
-
-        if existing_video:
-            logger.debug(
-                f"Most recent video from channel {channel.name} is already in DB, skipping"
-            )
-            continue
-
-        logger.info(
-            f"Channel {channel.name} has a new video not yet in DB (detected via RSS)"
-        )
-        channels_with_new_videos.append(channel)
-
-    return channels_with_new_videos
 
 
 def __youtube_subs_response_to_channels(
@@ -260,8 +131,7 @@ def __youtube_subs_response_to_channels(
             if not channel:  # New channel, add to db
                 channel = YoutubeChannel(
                     id=channel_id,
-                    name=c["snippet"]["title"],
-                    num_videos=int(c["contentDetails"]["totalItemCount"]),
+                    name=c["snippet"]["title"]
                 )
                 s.add(channel)
                 s.commit()
@@ -293,44 +163,6 @@ def __youtube_subs_response_to_channels(
         s.commit()
 
     return all_channels, recently_uploaded_channels
-
-
-def __is_short(body: dict, youtube: Resource) -> bool:
-    shorts_playlist_id: str = body["snippet"]["channelId"].replace("UC", "UUSH")
-    short_id: str = body["contentDetails"]["videoId"]
-
-    request = youtube.playlistItems().list(
-        part="snippet,status,contentDetails",
-        playlistId=shorts_playlist_id,
-        videoId=short_id,
-        maxResults=1,
-    )
-
-    logger.debug(f"Making request {request.uri}")
-    try:
-        response = request.execute()
-    except HttpError as err:
-        logger.warning(f"Error checking if video {short_id} is a short: {err}")
-        return False
-    __increment_quota_usage(1)
-    return response["pageInfo"]["totalResults"] > 0
-
-
-def __is_live(body: dict, youtube: Resource) -> bool:
-    livestream_id: str = body["contentDetails"]["videoId"]
-
-    request = youtube.videos().list(
-        part="snippet,liveStreamingDetails",
-        id=livestream_id,
-    )
-
-    logger.debug(f"Making request {request.uri}")
-    response = request.execute()
-    __increment_quota_usage(1)
-
-    body = response["items"][0]
-
-    return "liveStreamingDetails" in body
 
 
 def __make_request(request, units_used: int = 1) -> dict:

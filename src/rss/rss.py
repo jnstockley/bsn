@@ -1,15 +1,15 @@
 import asyncio
 import feedparser
+import aiohttp
 from feedparser import FeedParserDict
 
-from main import get_version
 from util.logging import logger
 
 
-async def get_youtube_feed(playlist_id: str):
+async def get_youtube_feed(playlist_id: str, session: aiohttp.ClientSession):
     if await __valid_id(playlist_id):
         try:
-            return await __get_rss_feed(playlist_id)
+            return await __get_rss_feed(playlist_id, session)
         except RuntimeError as e:
             logger.error(f"Failed to fetch rss feed. Error: {e}")
             return None
@@ -23,16 +23,15 @@ async def __valid_id(playlist_id: str) -> bool:
     return False
 
 
-async def __get_rss_feed(playlist_id: str):
+async def __get_rss_feed(playlist_id: str, session: aiohttp.ClientSession):
     url = f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
-    version = get_version()
-    user_agent = f"bsn/{version}"
     logger.debug(f"Fetching rss feed: {url}")
-    feed: FeedParserDict = await asyncio.to_thread(feedparser.parse, url, agent=user_agent)
 
-    status_code = feed.status
-    if status_code == 200:
-        logger.debug("Successfully fetched rss feed")
-        return feed
-    else:
-        raise RuntimeError(f"Failed to fetch rss feed. Status code: {status_code}")
+    async with session.get(url) as response:
+        if response.status != 200:
+            raise RuntimeError(f"Failed to fetch rss feed. Status code: {response.status}")
+        content = await response.text()
+
+    feed: FeedParserDict = await asyncio.to_thread(feedparser.parse, content)
+    logger.debug("Successfully fetched rss feed")
+    return feed

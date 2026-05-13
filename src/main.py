@@ -1,13 +1,18 @@
-import tomllib
+import asyncio
 import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
 from alembic import command
 from alembic.config import Config
 
 from auth import oauth as oauth
+from db import engine
+from models import YoutubeChannel
 from notifications.notifications import send_upload_notification
+from rss import rss
 from util.healthcheck import healthcheck
 import time
 
@@ -16,9 +21,8 @@ from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import (
     calculate_interval_between_cycles,
     pull_my_subscriptions,
-    get_recent_videos,
+    get_recent_content, fetch_all_recent_content,
 )
-
 
 def main():
     logger.info("Staring BSN...")
@@ -27,7 +31,12 @@ def main():
     command.upgrade(alembic_cfg, "head")
     logger.info("Database migrations applied.")
 
-    oauth.get_authenticated_youtube_service()
+    start_time = time.perf_counter()
+    asyncio.run(fetch_all_recent_content())
+    elapsed = time.perf_counter() - start_time
+    logger.info(f"fetch_all_recent_content completed in {elapsed:.2f}s")
+
+    '''oauth.get_authenticated_youtube_service()
 
     initialize_policy()
 
@@ -45,7 +54,7 @@ def main():
             time.sleep(interval_between_checks)
         else:
             logger.error("No valid credentials available. Exiting.")
-            exit(1)
+            exit(1)'''
 
 
 def parse_args():
@@ -61,13 +70,8 @@ def parse_args():
 
 
 def get_version():
-    try:
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-        return data["project"]["version"]
-    except FileNotFoundError, KeyError:
-        return "unknown"
+    from util.version import get_version as _get_version
+    return _get_version()
 
 
 if __name__ == "__main__":
