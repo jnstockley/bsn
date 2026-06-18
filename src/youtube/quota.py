@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import QuotaPolicy, Service, QuotaUsage
+from model import QuotaPolicy, Service, QuotaUsage
 from util.logging import logger
 
 

@@ -7,22 +7,19 @@ import aiohttp
 import pytz
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
+from rss.rss import get_content
 
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import YoutubeChannel, YoutubeVideo, QuotaPolicy, Service, QuotaUsage
+from model import YoutubeChannel, YoutubeVideo, QuotaPolicy, Service, QuotaUsage
+from models import Content
 from util.logging import logger
 
 
-def pull_my_subscriptions(youtube: Resource):
-    if not __check_available_quota():
-        logger.warning(
-            "Quota for YouTube API has been exhausted. Skipping subscription check."
-        )
-        return None, None
-
+def sync_subscriptions(youtube: Resource):
+    logger.info("Syncing subscriptions")
     request = youtube.subscriptions().list(
         part="snippet,contentDetails",
         mine=True,
@@ -31,17 +28,28 @@ def pull_my_subscriptions(youtube: Resource):
 
     response = __make_request(request)
 
-    channels, recently_uploaded_channels = __youtube_subs_response_to_channels(response)
+    with Session(engine) as s:
+        for c in response:
+            channel_id = c["snippet"]["resourceId"]["channelId"]
+            name = c["snippet"]["title"]
+            number_of_videos = c["contentDetails"]["totalItemCount"]
+            channel = YoutubeChannel(id=channel_id, name=name, num_videos=number_of_videos)
+            s.merge(channel)
+        s.commit()
 
-    remaining_channels = [
-        channel for channel in channels if channel not in recently_uploaded_channels
-    ]
-    recently_uploaded_channels += check_rss_for_new_videos(remaining_channels)
+def get_recent_videos(youtube: Resource | None = None):
+    channels: list[YoutubeChannel] = []
+    with Session(engine) as s:
+        stmt = select(YoutubeChannel)
+        channels = s.execute(stmt).all()
 
-    return channels, recently_uploaded_channels
+    for channel in channels:
+        content: set[Content] = asyncio.run(get_content(channel.id))
+        print(content)
 
+    pass
 
-def get_recent_videos(
+def get_recent_videos_old(
     channels: list[YoutubeChannel], youtube: Resource
 ) -> list[YoutubeVideo]:
     if not __check_available_quota():

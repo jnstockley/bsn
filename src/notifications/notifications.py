@@ -2,7 +2,7 @@ import os
 
 from apprise import apprise
 
-from models import YoutubeVideo
+from model import YoutubeVideo
 from notifications import apprise_urls
 from util.logging import logger
 

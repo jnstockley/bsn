@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from models import Base
+from model import Base
 
 load_dotenv()
 

@@ -2,6 +2,8 @@ import tomllib
 import argparse
 from pathlib import Path
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 from auth import oauth as oauth
@@ -13,8 +15,7 @@ from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import (
     calculate_interval_between_cycles,
-    pull_my_subscriptions,
-    get_recent_videos,
+    get_recent_videos, sync_subscriptions,
 )
 
 
@@ -24,11 +25,19 @@ def main():
     oauth.get_authenticated_youtube_service()
 
     initialize_policy()
+    initialize_usage()
+    youtube = oauth.get_authenticated_youtube_service()
+
+    #sync_subscriptions(youtube)
+
+    scheduler = BackgroundScheduler(timezone="America/Chicago")
+    scheduler.add_job(sync_subscriptions, CronTrigger(minute=0), args=[youtube])
+    scheduler.start()
 
     while True:
-        initialize_usage()
-        youtube = oauth.get_authenticated_youtube_service()
-        if youtube:
+        get_recent_videos()
+        exit(0)
+        '''if youtube:
             _, recently_uploaded_channels = pull_my_subscriptions(youtube)
             interval_between_checks: int = calculate_interval_between_cycles()
             if recently_uploaded_channels:
@@ -39,7 +48,7 @@ def main():
             time.sleep(interval_between_checks)
         else:
             logger.error("No valid credentials available. Exiting.")
-            exit(1)
+            exit(1)'''
 
 
 def parse_args():

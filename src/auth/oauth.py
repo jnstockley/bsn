@@ -38,7 +38,7 @@ from googleapiclient.discovery import Resource, build
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import OauthCredential
+from model import OauthCredential
 from util.logging import logger
 
 # ---------------------------------------------------------------------------
