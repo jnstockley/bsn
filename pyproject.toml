@@ -11,7 +11,7 @@ dependencies = [
     "python-dotenv==1.2.2",
     "pytz==2026.2",
     "sqlalchemy==2.0.50",
-    "youtube-notify==20260603001747.dev0",
+    "youtube-notify==1.0.0",
 ]
 license-files = ["LICENSE"]
 authors = [

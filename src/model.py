@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from youtube_notify import ContentType
 
 
 class Base(DeclarativeBase):
@@ -16,28 +17,26 @@ class YoutubeChannel(Base):
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
     num_videos: Mapped[int] = mapped_column(nullable=False)
-    video: Mapped["YoutubeVideo"] = relationship(back_populates="youtube_channel")
+    content: Mapped["YoutubeContent"] = relationship(back_populates="youtube_channel")
 
     def __repr__(self):
-        return f"YoutubeChannel(name={self.name}, num_videos={self.num_videos})"
+        return f"YoutubeChannel(id={self.id}, name={self.name}, num_videos={self.num_videos})"
 
 
-class YoutubeVideo(Base):
-    __tablename__ = "youtube_video"
+class YoutubeContent(Base):
+    __tablename__ = "youtube_content"
 
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     title: Mapped[str] = mapped_column(nullable=False)
-    url: Mapped[str] = mapped_column(nullable=False)
+    published_at: Mapped[datetime] = mapped_column(nullable=False)
     thumbnail_url: Mapped[str] = mapped_column(nullable=False)
-    is_short: Mapped[bool] = mapped_column(nullable=False)
-    is_livestream: Mapped[bool] = mapped_column(nullable=False)
-    uploaded_at: Mapped[datetime] = mapped_column(nullable=False)
+    description: Mapped[str] = mapped_column(nullable=False)
+    content_type: Mapped[ContentType] = mapped_column(nullable=False)
+    notified: Mapped[bool] = mapped_column(nullable=False, default=False)
+    notified_at: Mapped[datetime] = mapped_column(nullable=True)
     youtube_channel_id = mapped_column(ForeignKey("youtube_channel.id"))
 
-    youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="video")
-
-    def __repr__(self):
-        return f"YoutubeVideo(title={self.title}, url={self.url}, uploaded_at={self.uploaded_at}, uploaded_by={self.youtube_channel.name})"
+    youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="content")
 
 
 class OauthCredential(Base):

@@ -1,3 +1,6 @@
+import asyncio
+import os
+import time
 import tomllib
 import argparse
 from pathlib import Path
@@ -7,20 +10,21 @@ from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 from auth import oauth as oauth
-from notifications.notifications import send_upload_notification
+from notifications.notifications import send_notifications
 from util.healthcheck import healthcheck
-import time
 
 from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import (
-    calculate_interval_between_cycles,
-    get_recent_videos, sync_subscriptions,
+    get_recent_videos,
+    sync_subscriptions,
 )
 
 
-def main():
+async def main():
     logger.info("Staring BSN...")
+
+    interval: int = int(os.getenv("INTERVAL", default=30))
 
     oauth.get_authenticated_youtube_service()
 
@@ -28,27 +32,17 @@ def main():
     initialize_usage()
     youtube = oauth.get_authenticated_youtube_service()
 
-    #sync_subscriptions(youtube)
+    sync_subscriptions(youtube)
 
     scheduler = BackgroundScheduler(timezone="America/Chicago")
     scheduler.add_job(sync_subscriptions, CronTrigger(minute=0), args=[youtube])
     scheduler.start()
 
     while True:
-        get_recent_videos()
-        exit(0)
-        '''if youtube:
-            _, recently_uploaded_channels = pull_my_subscriptions(youtube)
-            interval_between_checks: int = calculate_interval_between_cycles()
-            if recently_uploaded_channels:
-                videos = get_recent_videos(recently_uploaded_channels, youtube)
-                send_upload_notification(videos)
-
-            logger.info(f"Sleeping for {interval_between_checks} seconds...")
-            time.sleep(interval_between_checks)
-        else:
-            logger.error("No valid credentials available. Exiting.")
-            exit(1)'''
+        await get_recent_videos()
+        send_notifications()
+        logger.info(f"Sleeping for {interval} seconds...")
+        time.sleep(interval)
 
 
 def parse_args():
@@ -88,7 +82,7 @@ if __name__ == "__main__":
             print("  version     - Display the current version of BSN")
             print("  help        - Show this help message")
         else:
-            main()
+            asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Shutting down BSN...")
         exit(0)
