@@ -21,6 +21,9 @@ from youtube_notify.models import Content
 from util.logging import logger
 
 
+GET_CONTENT_TIMEOUT_SECONDS = 30
+
+
 def sync_subscriptions(youtube: Resource):
     logger.info("Syncing subscriptions")
     request = youtube.subscriptions().list(
@@ -48,8 +51,25 @@ async def get_recent_videos() -> set[Content]:
         stmt = select(YoutubeChannel)
         channels = s.execute(stmt).scalars().all()
 
-    tasks = [asyncio.create_task(get_content(channel.id)) for channel in channels]
-    contents = await asyncio.gather(*tasks)
+    async def fetch_channel_content(channel_id: str):
+        try:
+            return await asyncio.wait_for(
+                get_content(channel_id), timeout=GET_CONTENT_TIMEOUT_SECONDS
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Timed out fetching recent videos for channel {channel_id} after {GET_CONTENT_TIMEOUT_SECONDS} seconds"
+            )
+        except Exception as exc:
+            logger.exception(
+                f"Failed to fetch recent videos for channel {channel_id}: {exc}"
+            )
+        return set()
+
+    tasks = [
+        asyncio.create_task(fetch_channel_content(channel.id)) for channel in channels
+    ]
+    contents = await asyncio.gather(*tasks, return_exceptions=False)
     content = set().union(*contents) if contents else set()
     load_content(content)
 

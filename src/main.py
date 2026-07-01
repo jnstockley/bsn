@@ -1,6 +1,5 @@
 import asyncio
 import os
-import time
 import tomllib
 import argparse
 from pathlib import Path
@@ -39,10 +38,14 @@ async def main():
     scheduler.start()
 
     while True:
-        await get_recent_videos()
-        send_notifications()
+        try:
+            await get_recent_videos()
+            send_notifications()
+        except Exception as exc:
+            logger.exception(f"Background cycle failed: {exc}")
+
         logger.info(f"Sleeping for {interval} seconds...")
-        time.sleep(interval)
+        await asyncio.sleep(interval)
 
 
 def parse_args():
