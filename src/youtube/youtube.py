@@ -1,5 +1,6 @@
 import asyncio
 import math
+import os
 from datetime import datetime
 
 import pytz
@@ -21,7 +22,7 @@ from youtube_notify.models import Content
 from util.logging import logger
 
 
-GET_CONTENT_TIMEOUT_SECONDS = 30
+GET_CONTENT_TIMEOUT_SECONDS: int = int(os.getenv("TIMEOUT", default=120))
 
 
 def sync_subscriptions(youtube: Resource):
