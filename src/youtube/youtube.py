@@ -1,6 +1,7 @@
 import asyncio
 import math
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import pytz
@@ -68,10 +69,32 @@ async def get_recent_videos() -> set[Content]:
             )
         return set()
 
-    tasks = [
-        asyncio.create_task(fetch_channel_content(channel.id)) for channel in channels
-    ]
-    contents = await asyncio.gather(*tasks, return_exceptions=False)
+    # `get_content()` fans each channel out into 3 concurrent RSS requests
+    # (video/livestream/short playlists) which run in worker threads via
+    # `asyncio.to_thread()`. `asyncio.to_thread()` submits work to the event
+    # loop's *default* executor, which by default only has a small, fixed
+    # number of worker threads (min(32, cpu_count + 4)). Once the number of
+    # channels grows large enough, requests beyond that thread count get
+    # queued and start later instead of all at once. Size a dedicated
+    # executor to fit every concurrent request so all RSS feeds start
+    # fetching at the same time, regardless of how many channels there are.
+    playlist_variants_per_channel = 3
+    max_workers = max(len(channels) * playlist_variants_per_channel, 1)
+    executor = ThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="rss-fetch"
+    )
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(executor)
+
+    try:
+        tasks = [
+            asyncio.create_task(fetch_channel_content(channel.id))
+            for channel in channels
+        ]
+        contents = await asyncio.gather(*tasks, return_exceptions=False)
+    finally:
+        executor.shutdown(wait=False)
+
     content = set().union(*contents) if contents else set()
     load_content(content)
 
