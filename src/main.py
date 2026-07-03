@@ -39,7 +39,9 @@ async def main():
 
     while True:
         try:
+            logger.info("Fetching recent videos...")
             await get_recent_videos()
+            logger.info("Fetched recent videos")
             send_notifications()
         except Exception as exc:
             logger.exception(f"Background cycle failed: {exc}")

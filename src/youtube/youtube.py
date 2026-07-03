@@ -53,6 +53,7 @@ async def get_recent_videos() -> set[Content]:
 
     async def fetch_channel_content(channel_id: str):
         try:
+            logger.info(f"Fetching recent videos for channel {channel_id}")
             return await asyncio.wait_for(
                 get_content(channel_id), timeout=GET_CONTENT_TIMEOUT_SECONDS
             )
@@ -77,15 +78,19 @@ async def get_recent_videos() -> set[Content]:
 
 
 def load_content(contents: set[Content]):
+    logger.debug("Start loading contents")
     if not contents:
+        logger.warning("No contents to load")
         return
 
     with Session(engine) as s:
         table_is_empty = s.execute(select(YoutubeContent.id)).first() is None
+        logger.debug(f"Table is empty: {table_is_empty}")
 
         for content in contents:
             existing_content = s.get(YoutubeContent, content.id)
             if existing_content:
+                logger.debug(f"Found existing YouTube content {existing_content}")
                 continue
 
             youtube_content = YoutubeContent(
@@ -101,7 +106,9 @@ def load_content(contents: set[Content]):
             logger.debug(f"Found new YouTube content {youtube_content}")
             s.add(youtube_content)
 
+        logger.debug("Starting commit...")
         s.commit()
+        logger.debug("Finished commit")
 
 
 def __make_request(request, units_used: int = 1) -> dict:
