@@ -98,6 +98,7 @@ def load_content(contents: set[Content]):
                 youtube_channel_id=content.channel.id,
                 notified=table_is_empty,
             )
+            logger.debug(f"Found new YouTube content {youtube_content}")
             s.add(youtube_content)
 
         s.commit()

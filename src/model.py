@@ -38,6 +38,9 @@ class YoutubeContent(Base):
 
     youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="content")
 
+    def __repr__(self):
+        return f"YoutubeContent(id={self.id}, title={self.title}, published_at={self.published_at}, content_type={self.content_type}, youtube_channel_id={self.youtube_channel_id})"
+
 
 class OauthCredential(Base):
     __tablename__ = "oauth_credential"
