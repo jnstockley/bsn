@@ -1,23 +1,19 @@
-<<<<<<< HEAD
-from auth import oauth as oauth
-=======
 import sys
 
->>>>>>> external/main
+from auth import oauth
 from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import __increment_quota_usage
 
 
 def healthcheck() -> bool:
-<<<<<<< HEAD
     example_channel_id = "UC_x5XG1OV2P6uZZ5FSM9Ttw"
     initialize_policy()
     initialize_usage()
     try:
         youtube = oauth.get_authenticated_youtube_service()
         if not youtube:
-            raise Exception("No valid YouTube service available.")
+            raise Exception("No valid YouTube service available.")  # noqa: TRY002
         request = youtube.channels().list(part="id", id=example_channel_id)
         response = request.execute()
         __increment_quota_usage(1)
@@ -26,13 +22,9 @@ def healthcheck() -> bool:
             or len(response["items"]) == 0
             or response["pageInfo"]["totalResults"] < 1
         ):
-            raise Exception("Healthcheck channel not found.")
+            raise Exception("Healthcheck channel not found.")  # noqa: TRY002
         logger.info("Healthcheck passed.")
-        exit(0)
-    except Exception as e:
+        sys.exit(0)
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Healthcheck failed: {e}", e)
-        exit(1)
-=======
-    logger.info("Healthcheck passed!")
-    sys.exit(0)
->>>>>>> external/main
+        sys.exit(1)

@@ -1,20 +1,20 @@
-import tomllib
 import argparse
+import sys
+import time
+import tomllib
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from auth import oauth as oauth
+from auth import oauth
 from notifications.notifications import send_upload_notification
 from util.healthcheck import healthcheck
-import time
-
 from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import (
     calculate_interval_between_cycles,
-    pull_my_subscriptions,
     get_recent_videos,
+    pull_my_subscriptions,
 )
 
 
@@ -39,7 +39,7 @@ def main():
             time.sleep(interval_between_checks)
         else:
             logger.error("No valid credentials available. Exiting.")
-            exit(1)
+            sys.exit(1)
 
 
 def parse_args():
@@ -82,4 +82,4 @@ if __name__ == "__main__":
             main()
     except KeyboardInterrupt:
         logger.info("Shutting down BSN...")
-        exit(0)
+        sys.exit(0)

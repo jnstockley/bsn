@@ -2,6 +2,8 @@ from datetime import datetime
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+import pytz
+
 from notifications.notifications import send_upload_notification
 
 
@@ -31,7 +33,6 @@ class TestNotifications(TestCase):
 
     def tearDown(self):
         """Clean up after tests"""
-        pass
 
     def _make_mock_video(
         self,
@@ -45,7 +46,7 @@ class TestNotifications(TestCase):
         mock_video.title = title
         mock_video.url = f"https://www.youtube.com/watch?v={video_id}"
         mock_video.thumbnail_url = "https://img"
-        mock_video.uploaded_at = datetime(2026, 2, 20, 12, 0, 0)
+        mock_video.uploaded_at = datetime(2026, 2, 20, 12, 0, 0, tzinfo=pytz.utc)
         mock_video.youtube_channel_id = "UC1234567890"
         # New notification logic checks is_livestream / is_short; tests assume regular uploads
         mock_video.is_livestream = False

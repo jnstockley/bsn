@@ -5,10 +5,10 @@ Pytest configuration file for test setup and fixtures.
 import os
 import sys
 from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
-
 
 # Set required environment variables before importing any modules
 os.environ["APPRISE_URLS"] = "test://localhost"

@@ -28,8 +28,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 from google.auth.transport.requests import Request
@@ -49,14 +48,7 @@ _DEVICE_AUTH_URL = "https://oauth2.googleapis.com/device/code"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 _REVOKE_URL = "https://oauth2.googleapis.com/revoke"
-
-_DEFAULT_SCOPES = " ".join(
-    [
-        "https://www.googleapis.com/auth/youtube.readonly",
-        "https://www.googleapis.com/auth/userinfo.email",
-        "https://www.googleapis.com/auth/userinfo.profile",
-    ]
-)
+_DEFAULT_SCOPES = "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
 _YOUTUBE_API_SERVICE = "youtube"
 _YOUTUBE_API_VERSION = "v3"
 
@@ -69,7 +61,7 @@ _REFRESH_MARGIN_SECONDS = int(os.getenv("TOKEN_REFRESH_MARGIN_SECONDS", "300"))
 # ---------------------------------------------------------------------------
 
 
-def _load_credential() -> Optional[OauthCredential]:
+def _load_credential() -> OauthCredential | None:
     """Return the first stored OauthCredential row, or *None* if none exist."""
     with Session(engine) as session:
         return session.query(OauthCredential).first()
@@ -77,11 +69,11 @@ def _load_credential() -> Optional[OauthCredential]:
 
 def _save_credential(
     creds: Credentials,
-    db_row: Optional[OauthCredential] = None,
-    user_id: Optional[str] = None,
-    user_email: Optional[str] = None,
-    client_id: Optional[str] = None,
-    client_secret: Optional[str] = None,
+    db_row: OauthCredential | None = None,
+    user_id: str | None = None,
+    user_email: str | None = None,
+    client_id: str | None = None,
+    client_secret: str | None = None,
 ) -> OauthCredential:
     """Persist a ``google.oauth2.credentials.Credentials`` object to the DB.
 
@@ -158,9 +150,9 @@ def _is_expired(
     expiry = creds.expiry
     # Normalise to UTC-aware datetime for comparison.
     if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
+        expiry = expiry.replace(tzinfo=UTC)
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     seconds_remaining = (expiry - now).total_seconds()
     return seconds_remaining <= margin_seconds
 
@@ -172,7 +164,7 @@ def _is_expired(
 
 def refresh_credential(
     row: OauthCredential,
-) -> Optional[OauthCredential]:
+) -> OauthCredential | None:
     """Refresh an access token using the stored refresh token.
 
     Returns the updated ``OauthCredential`` row on success, or *None* if the
@@ -191,7 +183,7 @@ def refresh_credential(
     try:
         creds.refresh(Request())
         logger.info("Successfully refreshed access token for credential id=%s.", row.id)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error(
             "Failed to refresh access token for credential id=%s: %s. Removing stale credential.",
             row.id,
@@ -226,7 +218,7 @@ def _poll_for_tokens(
     device_code: str,
     interval: int,
     expires_in: int,
-) -> Optional[dict]:
+) -> dict | None:
     """Poll the token endpoint until the user authorises the device or the code expires."""
     deadline = time.monotonic() + expires_in
     while time.monotonic() < deadline:
@@ -271,10 +263,10 @@ def _fetch_user_info(access_token: str) -> dict:
 
 
 def authenticate_with_device_code(
-    client_id: Optional[str] = None,
-    client_secret: Optional[str] = None,
-    scopes: Optional[str] = None,
-) -> Optional[OauthCredential]:
+    client_id: str | None = None,
+    client_secret: str | None = None,
+    scopes: str | None = None,
+) -> OauthCredential | None:
     """Run the full Device Authorization Grant flow interactively.
 
     Prints the verification URL + user code to *stdout* so the operator can
@@ -297,7 +289,7 @@ def authenticate_with_device_code(
 
     try:
         device_data = _fetch_device_code(client_id, scopes)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Failed to obtain device code: %s", exc)
         return None
 
@@ -328,11 +320,11 @@ def authenticate_with_device_code(
         return None
 
     # Build a Credentials object so we can use the standard helper.
-    expiry_dt: Optional[datetime] = None
+    expiry_dt: datetime | None = None
     expires_in_secs = token_data.get("expires_in")
     if expires_in_secs is not None:
         expiry_dt = datetime.fromtimestamp(
-            time.time() + int(expires_in_secs), tz=timezone.utc
+            time.time() + int(expires_in_secs), tz=UTC
         ).replace(tzinfo=None)  # store as naive UTC to match SQLAlchemy convention
 
     creds = Credentials(
@@ -346,14 +338,14 @@ def authenticate_with_device_code(
     )
 
     # Fetch user identity.
-    user_id: Optional[str] = None
-    user_email: Optional[str] = None
+    user_id: str | None = None
+    user_email: str | None = None
     try:
         info = _fetch_user_info(token_data["access_token"])
         user_id = info.get("id")
         user_email = info.get("email")
         logger.info("Authenticated as %s (%s).", user_email, user_id)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Could not fetch user info: %s", exc)
 
     row = _save_credential(
@@ -410,7 +402,7 @@ def revoke_expired_tokens() -> None:
                         headers={"Content-Type": "application/x-www-form-urlencoded"},
                         timeout=10,
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.warning(
                         "Revoke request failed for credential id=%s: %s", row.id, exc
                     )
@@ -424,7 +416,7 @@ def revoke_expired_tokens() -> None:
 
 def get_authenticated_youtube_service(
     force_auth: bool = False,
-) -> Optional[Resource]:
+) -> Resource | None:
     """Return an authenticated ``googleapiclient`` YouTube v3 ``Resource``.
 
     Behaviour
@@ -472,6 +464,6 @@ def get_authenticated_youtube_service(
         )
         logger.info("Built authenticated YouTube service for credential id=%s.", row.id)
         return youtube
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Failed to build YouTube service: %s", exc)
         return None

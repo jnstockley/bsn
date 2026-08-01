@@ -109,7 +109,7 @@ class TestMainIntegration(TestCase):
     ):
         """Test that main entry point runs healthcheck when argv[1] is 'healthcheck'"""
         with patch("main.__name__", "__main__"):
-            exec(
+            exec(  # noqa: S102
                 """
 if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
     healthcheck()
@@ -127,7 +127,7 @@ else:
     def test_main_entry_point_runs_main_without_args(self, mock_load_dotenv, mock_main):
         """Test that main entry point runs main() when no arguments provided"""
         with patch("main.__name__", "__main__"):
-            exec(
+            exec(  # noqa: S102
                 """
 if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
     pass  # Don't run healthcheck in test
@@ -147,7 +147,7 @@ else:
     ):
         """Test that main entry point runs main() when argument is not 'healthcheck'"""
         with patch("main.__name__", "__main__"):
-            exec(
+            exec(  # noqa: S102
                 """
 if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
     pass  # Don't run healthcheck in test
@@ -166,23 +166,22 @@ else:
         self, mock_load_dotenv, mock_main, mock_healthcheck
     ):
         """Test that main entry point loads .env file"""
-        with patch("sys.argv", ["main.py"]):
-            with patch("main.__name__", "__main__"):
-                exec(
-                    """
+        with patch("sys.argv", ["main.py"]), patch("main.__name__", "__main__"):
+            exec(  # noqa: S102
+                """
 load_dotenv()
 if len(sys.argv) > 1 and sys.argv[1] == "healthcheck":
     healthcheck()
 else:
     main()
 """,
-                    {
-                        "sys": sys,
-                        "load_dotenv": mock_load_dotenv,
-                        "healthcheck": mock_healthcheck,
-                        "main": mock_main,
-                    },
-                )
+                {
+                    "sys": sys,
+                    "load_dotenv": mock_load_dotenv,
+                    "healthcheck": mock_healthcheck,
+                    "main": mock_main,
+                },
+            )
 
         mock_load_dotenv.assert_called_once()
 

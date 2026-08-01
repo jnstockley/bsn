@@ -13,17 +13,16 @@ Changes made:
   with tests that exercise the available public functions and behavior.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest import TestCase
-from unittest.mock import MagicMock, AsyncMock, patch
-
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from youtube.youtube import (
-    pull_my_subscriptions,
-    get_recent_videos,
-    calculate_interval_between_cycles,
     _chunk_list,
+    calculate_interval_between_cycles,
     check_rss_for_new_videos,
+    get_recent_videos,
+    pull_my_subscriptions,
 )
 
 
@@ -36,7 +35,6 @@ class TestYouTube(TestCase):
 
     def tearDown(self):
         """Clean up after tests"""
-        pass
 
     # ------------------------------------------------------------------
     # Helper
@@ -158,13 +156,11 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Use a very recent timestamp (5s ago) so the video passes the age
         # check: interval = ceil(86400 / (10000 // ceil(2/50))) = 9s × 3 = 27s
         published_at = (
-            (now - timedelta(seconds=5))
-            .astimezone(timezone.utc)
-            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            (now - timedelta(seconds=5)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
         mock_response = {
@@ -255,11 +251,9 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published_at = (
-            (now - timedelta(minutes=1))
-            .astimezone(timezone.utc)
-            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            (now - timedelta(minutes=1)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
         mock_response = {
@@ -310,11 +304,9 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published_at = (
-            (now - timedelta(seconds=5))
-            .astimezone(timezone.utc)
-            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            (now - timedelta(seconds=5)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
         mock_response = {
@@ -388,12 +380,10 @@ class TestYouTube(TestCase):
         mock_channel = MagicMock()
         mock_channel.id = self.sample_channel_id
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Publish timestamp well outside the interval window (10 minutes ago)
         published_at = (
-            (now - timedelta(minutes=10))
-            .astimezone(timezone.utc)
-            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            (now - timedelta(minutes=10)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
         mock_response = {
@@ -610,7 +600,7 @@ class TestCheckRssForNewVideos(TestCase):
 
     def test_returns_channel_with_new_video(self):
         """Channel with a brand-new video (not in DB, published recently) is returned."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published = (now - timedelta(seconds=5)).isoformat()
         feed_bytes = self._make_atom_feed("vid_new", published)
 
@@ -632,7 +622,7 @@ class TestCheckRssForNewVideos(TestCase):
 
     def test_skips_channel_when_video_already_in_db(self):
         """Channel whose most recent RSS video is already in DB is NOT returned."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published = (now - timedelta(seconds=5)).isoformat()
         feed_bytes = self._make_atom_feed("vid_existing", published)
 
@@ -659,7 +649,7 @@ class TestCheckRssForNewVideos(TestCase):
         Age-based filtering has been intentionally removed from check_rss_for_new_videos;
         only the DB existence check determines whether a channel is included.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published = (now - timedelta(minutes=10)).isoformat()
         feed_bytes = self._make_atom_feed("vid_old", published)
 
@@ -694,7 +684,7 @@ class TestCheckRssForNewVideos(TestCase):
 
     def test_all_channels_passed_to_fetch(self):
         """All channels are forwarded to _fetch_all_rss_feeds in a single call."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         published = (now - timedelta(seconds=5)).isoformat()
         feed_a = self._make_atom_feed("vid_a", published)
         feed_b = self._make_atom_feed("vid_b", published)

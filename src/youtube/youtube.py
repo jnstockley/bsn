@@ -1,18 +1,17 @@
 import asyncio
 import math
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import aiohttp
 import pytz
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
-
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import YoutubeChannel, YoutubeVideo, QuotaPolicy, Service, QuotaUsage
+from models import QuotaPolicy, QuotaUsage, Service, YoutubeChannel, YoutubeVideo
 from util.logging import logger
 
 
@@ -88,8 +87,7 @@ def get_recent_videos(
         # Parse ISO 8601 UTC timestamp and convert to local timezone
         utc_time = datetime.strptime(
             body["contentDetails"]["videoPublishedAt"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        utc_time = utc_time.replace(tzinfo=timezone.utc)
+        ).replace(tzinfo=UTC)
         local_time = utc_time.astimezone()
 
         is_live: bool = __is_live(body, youtube)
@@ -101,9 +99,7 @@ def get_recent_videos(
             thumbnail_url=body["snippet"]["thumbnails"]["high"]["url"],
             is_short=__is_short(body, youtube),
             is_livestream=is_live,
-            uploaded_at=datetime.now(tz=timezone.utc).astimezone()
-            if is_live
-            else local_time,
+            uploaded_at=datetime.now(tz=UTC).astimezone() if is_live else local_time,
             youtube_channel_id=channel_id,
         )
 
@@ -163,7 +159,7 @@ async def _fetch_rss_feed(
         async with session.get(url) as resp:
             resp.raise_for_status()
             return channel, await resp.read()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning(f"Error fetching RSS feed for channel {channel.name}: {e}")
         return channel, None
 
@@ -342,7 +338,7 @@ def __make_request(request, units_used: int = 1) -> dict:
     __increment_quota_usage(units_used)
     response_body = response["items"]
 
-    while response["nextPageToken"] if "nextPageToken" in response else None:
+    while response.get("nextPageToken", None):
         next_page_token = response["nextPageToken"]
 
         request.uri = root_uri + f"&pageToken={next_page_token}"
