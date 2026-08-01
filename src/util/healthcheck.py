@@ -1,10 +1,16 @@
+<<<<<<< HEAD
 from auth import oauth as oauth
+=======
+import sys
+
+>>>>>>> external/main
 from util.logging import logger
 from youtube.quota import initialize_policy, initialize_usage
 from youtube.youtube import __increment_quota_usage
 
 
 def healthcheck() -> bool:
+<<<<<<< HEAD
     example_channel_id = "UC_x5XG1OV2P6uZZ5FSM9Ttw"
     initialize_policy()
     initialize_usage()
@@ -26,3 +32,7 @@ def healthcheck() -> bool:
     except Exception as e:
         logger.error(f"Healthcheck failed: {e}", e)
         exit(1)
+=======
+    logger.info("Healthcheck passed!")
+    sys.exit(0)
+>>>>>>> external/main
