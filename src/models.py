@@ -1,6 +1,5 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -16,7 +15,7 @@ class YoutubeChannel(Base):
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
     num_videos: Mapped[int] = mapped_column(nullable=False)
-    video: Mapped["YoutubeVideo"] = relationship(back_populates="youtube_channel")
+    video: Mapped[YoutubeVideo] = relationship(back_populates="youtube_channel")
 
     def __repr__(self):
         return f"YoutubeChannel(name={self.name}, num_videos={self.num_videos})"
@@ -34,7 +33,7 @@ class YoutubeVideo(Base):
     uploaded_at: Mapped[datetime] = mapped_column(nullable=False)
     youtube_channel_id = mapped_column(ForeignKey("youtube_channel.id"))
 
-    youtube_channel: Mapped["YoutubeChannel"] = relationship(back_populates="video")
+    youtube_channel: Mapped[YoutubeChannel] = relationship(back_populates="video")
 
     def __repr__(self):
         return f"YoutubeVideo(title={self.title}, url={self.url}, uploaded_at={self.uploaded_at}, uploaded_by={self.youtube_channel.name})"
@@ -44,17 +43,17 @@ class OauthCredential(Base):
     __tablename__ = "oauth_credential"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    client_id: Mapped[Optional[str]] = mapped_column(nullable=True)
-    client_secret: Mapped[Optional[str]] = mapped_column(nullable=True)
-    user_id: Mapped[Optional[str]] = mapped_column(nullable=True)
-    user_email: Mapped[Optional[str]] = mapped_column(nullable=True)
-    access_token: Mapped[Optional[str]] = mapped_column(nullable=True)
-    refresh_token: Mapped[Optional[str]] = mapped_column(nullable=True)
-    token_uri: Mapped[Optional[str]] = mapped_column(nullable=True)
-    scopes: Mapped[Optional[str]] = mapped_column(nullable=True)
-    token_type: Mapped[Optional[str]] = mapped_column(nullable=True)
-    expiry: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    extra: Mapped[Optional[str]] = mapped_column(nullable=True)
+    client_id: Mapped[str | None] = mapped_column(nullable=True)
+    client_secret: Mapped[str | None] = mapped_column(nullable=True)
+    user_id: Mapped[str | None] = mapped_column(nullable=True)
+    user_email: Mapped[str | None] = mapped_column(nullable=True)
+    access_token: Mapped[str | None] = mapped_column(nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(nullable=True)
+    token_uri: Mapped[str | None] = mapped_column(nullable=True)
+    scopes: Mapped[str | None] = mapped_column(nullable=True)
+    token_type: Mapped[str | None] = mapped_column(nullable=True)
+    expiry: Mapped[datetime | None] = mapped_column(nullable=True)
+    extra: Mapped[str | None] = mapped_column(nullable=True)
 
     def __repr__(self):
         return f"OauthCredential(id={self.id}, client_id={self.client_id}, user_email={self.user_email})"
@@ -77,7 +76,7 @@ class QuotaPolicy(Base):
     service: Mapped[Service] = mapped_column(nullable=False, unique=True)
     limit: Mapped[int] = mapped_column(nullable=False)
 
-    usages: Mapped[list["QuotaUsage"]] = relationship(
+    usages: Mapped[list[QuotaUsage]] = relationship(
         back_populates="config", cascade="all, delete-orphan"
     )
 
@@ -100,12 +99,12 @@ class QuotaUsage(Base):
     window_start: Mapped[datetime] = mapped_column(nullable=False)
     window_end: Mapped[datetime] = mapped_column(nullable=False)
     usage_count: Mapped[int] = mapped_column(nullable=False)
-    quota_remaining: Mapped[Optional[int]] = mapped_column(nullable=True)
+    quota_remaining: Mapped[int | None] = mapped_column(nullable=True)
 
     # reset_at should be the UTC datetime matching the config's next reset for the window
-    reset_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    reset_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    config: Mapped["QuotaPolicy"] = relationship(back_populates="usages")
+    config: Mapped[QuotaPolicy] = relationship(back_populates="usages")
 
     def __repr__(self):
         return (

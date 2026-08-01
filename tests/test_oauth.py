@@ -14,27 +14,27 @@ Covers:
 from __future__ import annotations
 
 import time  # noqa: F401 – used indirectly via patch("auth.oauth.time.*")
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from models import OauthCredential
 from auth.oauth import (
-    _load_credential,
-    _save_credential,
+    _DEFAULT_SCOPES,
+    _TOKEN_URL,
     _delete_credential,
-    _row_to_credentials,
-    _is_expired,
     _fetch_device_code,
-    _poll_for_tokens,
     _fetch_user_info,
+    _is_expired,
+    _load_credential,
+    _poll_for_tokens,
+    _row_to_credentials,
+    _save_credential,
     authenticate_with_device_code,
+    get_authenticated_youtube_service,
     refresh_credential,
     revoke_expired_tokens,
-    get_authenticated_youtube_service,
-    _TOKEN_URL,
-    _DEFAULT_SCOPES,
 )
+from models import OauthCredential
 
 
 def _make_row(
@@ -68,16 +68,12 @@ def _make_row(
 
 def _future_expiry(seconds: int = 3600) -> datetime:
     """Return a naive-UTC datetime that is *seconds* in the future."""
-    return (datetime.now(tz=timezone.utc) + timedelta(seconds=seconds)).replace(
-        tzinfo=None
-    )
+    return (datetime.now(tz=UTC) + timedelta(seconds=seconds)).replace(tzinfo=None)
 
 
 def _past_expiry(seconds: int = 3600) -> datetime:
     """Return a naive-UTC datetime that is *seconds* in the past."""
-    return (datetime.now(tz=timezone.utc) - timedelta(seconds=seconds)).replace(
-        tzinfo=None
-    )
+    return (datetime.now(tz=UTC) - timedelta(seconds=seconds)).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +309,7 @@ class TestIsExpired(TestCase):
     def test_tz_aware_expiry_is_handled(self):
         """Timezone-aware datetimes should be normalised correctly."""
         creds = MagicMock()
-        creds.expiry = datetime.now(tz=timezone.utc) - timedelta(seconds=10)
+        creds.expiry = datetime.now(tz=UTC) - timedelta(seconds=10)
         self.assertTrue(_is_expired(creds, margin_seconds=0))
 
 
@@ -394,7 +390,7 @@ class TestFetchDeviceCode(TestCase):
         mock_resp.raise_for_status.side_effect = Exception("HTTP 400")
         mock_post.return_value = mock_resp
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception):  # noqa: B017
             _fetch_device_code("cid", "scope")
 
 
@@ -499,7 +495,7 @@ class TestFetchUserInfo(TestCase):
         mock_resp.raise_for_status.side_effect = Exception("401")
         mock_get.return_value = mock_resp
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception):  # noqa: B017
             _fetch_user_info("bad-tok")
 
 
@@ -616,7 +612,7 @@ class TestAuthenticateWithDeviceCode(TestCase):
         ):
             authenticate_with_device_code()
 
-        args, kwargs = mock_fetch.call_args
+        args, _ = mock_fetch.call_args
         self.assertEqual(args[0], "env-cid")
 
 

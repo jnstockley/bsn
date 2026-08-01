@@ -144,7 +144,7 @@ class TestLogging(TestCase):
 
     def test_logger_level_matches_env(self):
         """Test that logger level matches the configured log level"""
-        from util.logging import logger, log_level
+        from util.logging import log_level, logger
 
         # The logger should be set to the log_level from environment
         expected_level = getattr(logging, log_level)
@@ -152,7 +152,7 @@ class TestLogging(TestCase):
 
     def test_logger_handlers_have_correct_level(self):
         """Test that all handlers have the correct log level"""
-        from util.logging import logger, log_level
+        from util.logging import log_level, logger
 
         expected_level = getattr(logging, log_level)
 
@@ -190,7 +190,7 @@ class TestLogging(TestCase):
         try:
             logger.info("Test info message")
             success = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             success = False
 
         self.assertTrue(success)
@@ -203,7 +203,7 @@ class TestLogging(TestCase):
         try:
             logger.error("Test error message")
             success = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             success = False
 
         self.assertTrue(success)
@@ -216,7 +216,7 @@ class TestLogging(TestCase):
         try:
             logger.debug("Test debug message")
             success = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             success = False
 
         self.assertTrue(success)
@@ -229,7 +229,7 @@ class TestLogging(TestCase):
         try:
             logger.warning("Test warning message")
             success = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             success = False
 
         self.assertTrue(success)
