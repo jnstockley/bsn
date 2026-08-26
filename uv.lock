@@ -83,7 +83,7 @@ wheels = [
 
 [[package]]
 name = "apprise"
-version = "1.12.0"
+version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -94,9 +94,9 @@ dependencies = [
     { name = "requests-oauthlib" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ff/f7/95a52cda9355f32c5db9ef77bac18e85977472d29c555fafd825cf60c309/apprise-1.12.0.tar.gz", hash = "sha256:ffe9860d99cbde05fd156c610d4bcb49d953200c4ed3cb2db001ed50722fc142", size = 2477874, upload-time = "2026-07-04T16:15:36.67Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/36/80a0e7f99f59902ca5a30051c2034938dc9387eeca7d78f750fb1585c890/apprise-1.13.0.tar.gz", hash = "sha256:9a56964bf3ca004b3e0db98ab8a8d87fad051d8edb377bc166dc4be826666c81", size = 2512349, upload-time = "2026-08-20T14:50:33.404Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/e9/acfea54abdd66a059ff82995d3703eca3a27df3dc1bdc6afaf8a30a854fe/apprise-1.12.0-py3-none-any.whl", hash = "sha256:28edabfec5a9d5dbcd9aa28bdfd8928ecb68764e40214b6e648eab6d974b5a93", size = 1797824, upload-time = "2026-07-04T16:15:34.228Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/ab/199a88aa1cee354a0e9bc0d9fce9d14969214e3c95b466d75d63756112c5/apprise-1.13.0-py3-none-any.whl", hash = "sha256:cc8f4e2b138a46ff0397f649d73622ab268ddb94a0954399ff318a29a30146c8", size = 1817510, upload-time = "2026-08-20T14:50:31.346Z" },
 ]
 
 [[package]]
@@ -131,8 +131,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "==3.14.3" },
-    { name = "apprise", specifier = "==1.12.0" },
-    { name = "google-api-python-client", specifier = "==2.198.0" },
+    { name = "apprise", specifier = "==1.13.0" },
+    { name = "google-api-python-client", specifier = "==2.199.0" },
     { name = "python-dotenv", specifier = "==1.2.3" },
     { name = "pytz", specifier = "==2026.3.post1" },
     { name = "sqlalchemy", specifier = "==2.0.52" },
@@ -420,7 +420,7 @@ wheels = [
 
 [[package]]
 name = "google-api-python-client"
-version = "2.198.0"
+version = "2.199.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core" },
@@ -429,9 +429,9 @@ dependencies = [
     { name = "httplib2" },
     { name = "uritemplate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/53/0cd38e3a29d72ce45e27feba2ce1cd8049d69af9c48cb14fb164f1be9133/google_api_python_client-2.198.0.tar.gz", hash = "sha256:dfe3e16fb241af6e9c460a33f65085b3450e05cea09364f6b5d8997fb7e43e2a", size = 15060142, upload-time = "2026-06-25T14:32:42.953Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/ff/c58d475046b552754a5ee24d98912506b07ea7ac7f0a434b327ad194ca32/google_api_python_client-2.199.0.tar.gz", hash = "sha256:8150816e22e01b36aa4b7523cdc1a2d2164e81c4de8a9b338785d7ecb4390ec2", size = 15394941, upload-time = "2026-08-20T21:38:39.745Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/92/0fc9e7a09eb240c31b879bd8d2e43f81ed1f86c4798b79ead4a083921ab3/google_api_python_client-2.198.0-py3-none-any.whl", hash = "sha256:fabac935474e817da5e662ff61bf7139439d6f92b32d332a7318a2d45931e03e", size = 15644203, upload-time = "2026-06-25T14:32:39.963Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/42/c443badc33d972ee0e0adcd481c32a71f15d3e04c23a7a3d758e4018c633/google_api_python_client-2.199.0-py3-none-any.whl", hash = "sha256:1d2fa0e7f9d68f063b1a9ff7ed290d6e6c93176260487bf3a991e41534ca23a3", size = 15991965, upload-time = "2026-08-20T21:38:37.274Z" },
 ]
 
 [[package]]
