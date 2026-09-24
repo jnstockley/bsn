@@ -17,7 +17,7 @@ dependencies = [
     "apprise==1.13.1",
     "google-api-python-client==2.200.0",
     "python-dotenv==1.2.3",
-    "pytz==2026.3.post1",
+    "pytz==2026.4",
     "sqlalchemy==2.0.54",
 ]
 [project.urls]
