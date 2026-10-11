@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "aiohttp==3.14.4",
+    "aiohttp==3.14.5",
     "apprise==2.0.1",
     "google-api-python-client==2.201.0",
     "pytz==2026.5",
